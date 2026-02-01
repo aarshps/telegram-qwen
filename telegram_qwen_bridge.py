@@ -1,6 +1,7 @@
 import os
 import subprocess
 import logging
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
@@ -55,6 +56,9 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
 def main() -> None:
     """Start the bot."""
+    # Load environment variables from .env file
+    load_dotenv()
+    
     # Get the token from environment variable
     token = os.environ.get('TELEGRAM_BOT_TOKEN')
     

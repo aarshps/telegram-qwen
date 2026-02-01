@@ -1,5 +1,7 @@
 # Telegram-Qwen CLI Bridge
 
+[![GitHub Repo](https://img.shields.io/badge/GitHub-telegram--qwen-blue?logo=github)](https://github.com/aarshps/telegram-qwen)
+
 A simple bridge to connect Telegram chat with your local Qwen CLI.
 
 ## Setup
@@ -11,10 +13,12 @@ A simple bridge to connect Telegram chat with your local Qwen CLI.
    pip install -r requirements.txt
    ```
 
-3. Set your Telegram bot token as an environment variable:
+3. Set your Telegram bot token. You can copy `.env.example` to `.env` and fill in your token:
    ```bash
-   export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+   cp .env.example .env
    ```
+   *Note: Ensure you have a way to load these environment variables (like `python-dotenv`) or export them manually.*
+
 
 4. Make sure your Qwen CLI is installed and accessible from your command line.
 
