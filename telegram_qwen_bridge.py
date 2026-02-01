@@ -282,26 +282,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 logger.info(f"Executing command: {full_command}")
 
                 try:
+                    # For Python scripts, we might need to ensure output is flushed
                     proc = await asyncio.create_subprocess_shell(
                         full_command,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE
                     )
                     out, err = await proc.communicate()
+
+                    # Check the return code to see if the command succeeded
+                    if proc.returncode != 0:
+                        logger.warning(f"Command '{full_command}' exited with code {proc.returncode}")
+
                 except Exception as cmd_error:
                     logger.error(f"Failed to execute command '{full_command}': {cmd_error}")
                     cmd_output = f"Command execution failed: {cmd_error}"
                     out, err = None, None
 
                 # Decode Output
-                try:
-                    cmd_output = out.decode('utf-8').strip() if out else ""
-                    cmd_error = err.decode('utf-8').strip() if err else ""
-                    cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
-                except UnicodeDecodeError:
-                    cmd_output = out.decode('cp850', errors='replace').strip() if out else ""
-                    cmd_error = err.decode('cp850', errors='replace').strip() if err else ""
-                    cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
+                if out is not None or err is not None:
+                    try:
+                        cmd_output = out.decode('utf-8').strip() if out else ""
+                        cmd_error = err.decode('utf-8').strip() if err else ""
+                        cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
+
+                        # If the output is empty but the command was a Python script,
+                        # it might be because print statements weren't flushed
+                        if not cmd_output and 'python' in cmd.lower():
+                            logger.warning(f"Python command '{cmd}' returned empty output - this might be due to buffering")
+
+                    except UnicodeDecodeError:
+                        cmd_output = out.decode('cp850', errors='replace').strip() if out else ""
+                        cmd_error = err.decode('cp850', errors='replace').strip() if err else ""
+                        cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
+                else:
+                    # This case occurs when command execution failed completely
+                    cmd_output = "Command execution failed and produced no output"
 
                 # Truncate output if too long
                 truncated_output = cmd_output[:MAX_OUTPUT_LENGTH]
