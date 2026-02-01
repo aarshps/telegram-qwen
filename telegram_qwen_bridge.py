@@ -214,14 +214,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     process.communicate(input=full_prompt.encode()),
                     timeout=QWEN_TIMEOUT
                 )
+
+                # Check if stderr has content which might indicate an error
+                if stderr:
+                    stderr_content = stderr.decode().strip()
+                    if stderr_content:
+                        logger.warning(f"Qwen process stderr: {stderr_content}")
+
+                if not stdout:
+                    logger.error("Qwen process returned empty stdout")
+                    if turn == 0:
+                        await update.message.reply_text("❌ Qwen returned an empty response. Please try again.")
+                    continue  # Continue to next turn or break if needed
+
+                response = stdout.decode().strip()
+
             except asyncio.TimeoutError:
                 process.kill()
                 if turn == 0:
                     await update.message.reply_text("⏰ Qwen took too long to respond.")
                 logger.warning("Qwen process timed out")
                 return
-
-            response = stdout.decode().strip()
+            except Exception as e:
+                logger.error(f"Error communicating with Qwen: {e}")
+                if turn == 0:
+                    await update.message.reply_text(f"❌ Error communicating with Qwen: {e}")
+                return
 
             # Audit Log
             await write_audit_log(f"TURN {turn+1} - Response: {response[:200]}...")
@@ -261,18 +279,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 if os.name == 'nt' and not (cmd.lower().startswith('cmd') or cmd.lower().startswith('powershell')):
                     full_command = f'cmd /c {cmd}'
 
-                proc = await asyncio.create_subprocess_shell(
-                    full_command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                out, err = await proc.communicate()
+                logger.info(f"Executing command: {full_command}")
+
+                try:
+                    proc = await asyncio.create_subprocess_shell(
+                        full_command,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    out, err = await proc.communicate()
+                except Exception as cmd_error:
+                    logger.error(f"Failed to execute command '{full_command}': {cmd_error}")
+                    cmd_output = f"Command execution failed: {cmd_error}"
+                    out, err = None, None
 
                 # Decode Output
                 try:
-                    cmd_output = out.decode('utf-8').strip() + err.decode('utf-8').strip()
+                    cmd_output = out.decode('utf-8').strip() if out else ""
+                    cmd_error = err.decode('utf-8').strip() if err else ""
+                    cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
                 except UnicodeDecodeError:
-                    cmd_output = out.decode('cp850', errors='replace').strip() + err.decode('cp850', errors='replace').strip()
+                    cmd_output = out.decode('cp850', errors='replace').strip() if out else ""
+                    cmd_error = err.decode('cp850', errors='replace').strip() if err else ""
+                    cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
 
                 # Truncate output if too long
                 truncated_output = cmd_output[:MAX_OUTPUT_LENGTH]
