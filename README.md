@@ -148,6 +148,20 @@ Usage within Qwen prompts:
 - Audit logs are stored in `audit.log`
 - Application logs are printed to the console
 
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- [Getting Started](docs/getting-started.md) - Quick start guide
+- [Installation Guide](docs/installation-guide.md) - Detailed setup instructions
+- [Configuration](docs/configuration.md) - How to configure the bot
+- [Usage Guide](docs/usage-guide.md) - Complete usage instructions
+- [Security Considerations](docs/security.md) - Important security information
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- [Advanced Features](docs/advanced-features.md) - Advanced capabilities
+- [FAQ](docs/faq.md) - Frequently asked questions
+- [Contributing](docs/contributing.md) - How to contribute to the project
+
 ## Development
 
 To contribute to this project:
@@ -158,6 +172,8 @@ To contribute to this project:
 4. Add tests if applicable
 5. Submit a pull request
 
+See the [Contributing Guide](docs/contributing.md) for detailed information on how to participate in the project.
+
 ### Project Structure
 
 ```
@@ -165,9 +181,12 @@ telegram-qwen/
 ├── telegram_qwen_bridge.py    # Main bot application
 ├── tools/
 │   └── web_reader.py         # Web content extraction tool
+├── docs/                     # Documentation files
 ├── requirements.txt          # Python dependencies
 ├── .env.example             # Example environment variables
 ├── .gitignore              # Git ignore rules
+├── setup.bat                # Windows setup script
+├── setup.sh                 # Unix setup script
 └── README.md               # This file
 ```
 
@@ -178,6 +197,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+See the [Contributing Guide](docs/contributing.md) for detailed information on how to participate in the project.
 
 ## Disclaimer
 
