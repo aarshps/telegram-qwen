@@ -1,9 +1,10 @@
 import os
 import subprocess
 import logging
+import asyncio
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Enable logging
 logging.basicConfig(
@@ -13,11 +14,11 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
-    update.message.reply_text('Hello! Send me a message and I will forward it to Qwen CLI.')
+    await update.message.reply_text('Hello! Send me a message and I will forward it to Qwen CLI.')
 
-def handle_message(update: Update, context: CallbackContext) -> None:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages and forward to Qwen CLI."""
     user_message = update.message.text
     chat_id = update.effective_chat.id
@@ -26,33 +27,40 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     logger.info(f"Received message from chat {chat_id}: {user_message}")
 
     try:
-        # Execute Qwen CLI with the user's message as input
-        # Note: This assumes Qwen CLI accepts input via stdin
-        result = subprocess.run(
-            ['qwen', 'chat'],  # Adjust this command based on how your CLI works
-            input=user_message,
-            text=True,
-            capture_output=True,
-            timeout=30  # Timeout after 30 seconds
+        # Run Qwen CLI as a subprocess
+        # We use asyncio.create_subprocess_exec for non-blocking execution
+        process = await asyncio.create_subprocess_exec(
+            'qwen', '-p', user_message,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
 
-        # Get the output from Qwen CLI
-        response = result.stdout
+        # Wait for the command to finish with a timeout
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            
+            response = stdout.decode().strip()
+            error = stderr.decode().strip()
 
-        # If there's an error, include stderr
-        if result.returncode != 0:
-            response = f"Error: {result.stderr}"
+            if process.returncode != 0:
+                response = f"Error: {error if error else 'Unknown error'}"
+            elif not response:
+                response = "Qwen returned an empty response."
 
-        # Send the response back to the user
-        update.message.reply_text(response[:4096])  # Telegram message limit is 4096 chars
+            # Send the response back to the user
+            # Telegram message limit is 4096 chars
+            for i in range(0, len(response), 4096):
+                await update.message.reply_text(response[i:i+4096])
+
+        except asyncio.TimeoutExpired:
+            process.kill()
+            await update.message.reply_text("Sorry, the Qwen CLI took too long to respond.")
         
-    except subprocess.TimeoutExpired:
-        update.message.reply_text("Sorry, the Qwen CLI took too long to respond.")
     except FileNotFoundError:
-        update.message.reply_text("Error: Qwen CLI not found. Please ensure it's installed and in PATH.")
+        await update.message.reply_text("Error: Qwen CLI not found. Please ensure it's installed and in PATH.")
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
-        update.message.reply_text(f"An error occurred: {str(e)}")
+        await update.message.reply_text(f"An error occurred: {str(e)}")
 
 def main() -> None:
     """Start the bot."""
@@ -64,24 +72,20 @@ def main() -> None:
     
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN environment variable not set!")
+        print("\nERROR: TELEGRAM_BOT_TOKEN not found.")
+        print("Please create a .env file with your token: TELEGRAM_BOT_TOKEN=your_token_here\n")
         return
     
-    # Create the Updater
-    updater = Updater(token)
-    
-    # Get the dispatcher to register handlers
-    dispatcher = updater.dispatcher
+    # Create the Application
+    application = ApplicationBuilder().token(token).build()
     
     # Register handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     # Start the bot
     logger.info("Starting bot...")
-    updater.start_polling()
-    
-    # Run the bot until you press Ctrl-C
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
