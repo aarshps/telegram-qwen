@@ -28,8 +28,8 @@ CHAT_HISTORY_FILE = "chat_history.json"
 MAX_MESSAGE_LENGTH = 4096
 COMMAND_TIMEOUT = 60
 QWEN_TIMEOUT = 120
-MAX_HISTORY_MESSAGES = 20
-MAX_OUTPUT_LENGTH = 8000
+MAX_HISTORY_MESSAGES = 10
+MAX_OUTPUT_LENGTH = 2000
 MAX_TURN_COUNT = 10
 
 
@@ -193,9 +193,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     CHAT_HISTORY.append(f"USER: {user_message}")
     save_history()
 
-    # Context Pruning for Prompt (keep last few messages for context window)
+    # Context Pruning for Prompt
+    # We prune the history and also truncate long tool outputs to keep context window safe
     recent_history = CHAT_HISTORY[-MAX_HISTORY_MESSAGES:]
-    session_history = "\n".join(recent_history) + "\n"
+    formatted_history = []
+    for msg in recent_history:
+        if "RESULT:" in msg:
+            parts = msg.split("RESULT:", 1)
+            msg = parts[0] + "RESULT: " + parts[1][:1000] + "..."
+        formatted_history.append(msg)
+    
+    session_history = "\n".join(formatted_history) + "\n"
 
     # ReAct Loop
     for turn in range(MAX_TURN_COUNT):
@@ -216,7 +224,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             # CASE A: Final Answer (No Commands to execute)
             if not exec_blocks:
-                logger.info(f"Received final answer from {selected_model}")
+                logger.info("Received final answer from Qwen")
 
                 # Send response to user
                 if response:
@@ -225,7 +233,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         chunk = response[i:i+MAX_MESSAGE_LENGTH]
                         await update.message.reply_text(chunk, parse_mode=None)
                 else:
-                    await update.message.reply_text(f"Received empty response from {selected_model}.")
+                    await update.message.reply_text("Received empty response from Qwen.")
 
                 # Save Agent Response to History
                 CHAT_HISTORY.append(f"AGENT: {response}")

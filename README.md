@@ -16,7 +16,7 @@ A Python bot that connects Telegram with the Qwen AI model, allowing you to inte
 
 - Python 3.8+
 - Telegram Bot Token (get one from [@BotFather](https://t.me/BotFather))
-- Qwen CLI installed and accessible from command line (install with `pip install qwen`)
+- Qwen CLI installed and accessible from command line (install with `npm install -g @qwen-code/qwen-code`)
 - Windows, macOS, or Linux system
 
 ## Installation
@@ -62,7 +62,12 @@ A Python bot that connects Telegram with the Qwen AI model, allowing you to inte
 
 ## Usage
 
-1. **Start the bot:**
+1. **Activate the virtual environment:**
+   - **CMD:** `venv\Scripts\activate`
+   - **PowerShell:** `.\venv\Scripts\Activate.ps1`
+   - **Linux/macOS:** `source venv/bin/activate`
+
+2. **Start the bot:**
    ```bash
    python telegram_qwen_bridge.py
    ```
