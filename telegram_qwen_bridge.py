@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from telegram import Update, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
+
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -31,6 +32,7 @@ MAX_HISTORY_MESSAGES = 20
 MAX_OUTPUT_LENGTH = 8000
 MAX_TURN_COUNT = 10
 
+
 # Utility to escape markdown characters
 def escape_markdown(text):
     escape_chars = r'_*[]()~`>#+-=|{}.!'
@@ -39,7 +41,7 @@ def escape_markdown(text):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     welcome_message = (
-        "👋 Hello! I am your Qwen PC Controller.\n\n"
+        "👋 Hello! I am your AI PC Controller.\n\n"
         "Available commands:\n"
         "/id - Get your Chat ID\n"
         "/exec <command> - Execute a shell command\n"
@@ -110,6 +112,7 @@ async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # Global Memory
 CHAT_HISTORY: List[str] = []
 
+
 def load_history():
     """Load chat history from file."""
     global CHAT_HISTORY
@@ -137,6 +140,7 @@ async def reset_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_history()
     await update.message.reply_text("🧹 Memory wiped! I am a blank slate.")
 
+
 # Thread-safe logging
 audit_lock = asyncio.Lock()
 
@@ -151,9 +155,10 @@ async def write_audit_log(content: str):
             logger.error(f"Audit log write failed: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle incoming messages and forward to Qwen CLI."""
+    """Handle incoming messages and forward to selected AI model."""
     user_message = update.message.text
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
 
     # Authorization check for chat execution
     admin_id = os.environ.get('TELEGRAM_ADMIN_ID')
@@ -200,46 +205,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         try:
             logger.info(f"Starting turn {turn + 1}")
-
-            # Start Qwen process
-            process = await asyncio.create_subprocess_shell(
-                "qwen",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(input=full_prompt.encode()),
-                    timeout=QWEN_TIMEOUT
-                )
-
-                # Check if stderr has content which might indicate an error
-                if stderr:
-                    stderr_content = stderr.decode().strip()
-                    if stderr_content:
-                        logger.warning(f"Qwen process stderr: {stderr_content}")
-
-                if not stdout:
-                    logger.error("Qwen process returned empty stdout")
-                    if turn == 0:
-                        await update.message.reply_text("❌ Qwen returned an empty response. Please try again.")
-                    continue  # Continue to next turn or break if needed
-
-                response = stdout.decode().strip()
-
-            except asyncio.TimeoutError:
-                process.kill()
-                if turn == 0:
-                    await update.message.reply_text("⏰ Qwen took too long to respond.")
-                logger.warning("Qwen process timed out")
-                return
-            except Exception as e:
-                logger.error(f"Error communicating with Qwen: {e}")
-                if turn == 0:
-                    await update.message.reply_text(f"❌ Error communicating with Qwen: {e}")
-                return
+            response = await call_qwen_cli(full_prompt)
 
             # Audit Log
             await write_audit_log(f"TURN {turn+1} - Response: {response[:200]}...")
@@ -250,7 +216,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             # CASE A: Final Answer (No Commands to execute)
             if not exec_blocks:
-                logger.info("Received final answer from Qwen")
+                logger.info(f"Received final answer from {selected_model}")
 
                 # Send response to user
                 if response:
@@ -259,10 +225,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         chunk = response[i:i+MAX_MESSAGE_LENGTH]
                         await update.message.reply_text(chunk, parse_mode=None)
                 else:
-                    await update.message.reply_text("Received empty response from Qwen.")
+                    await update.message.reply_text(f"Received empty response from {selected_model}.")
 
                 # Save Agent Response to History
-                CHAT_HISTORY.append(f"QWEN: {response}")
+                CHAT_HISTORY.append(f"AGENT: {response}")
                 save_history()
                 break
 
@@ -328,7 +294,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 session_history += f"OUTPUT: [EXEC]{cmd}[/EXEC]\nRESULT: {truncated_output}\n"
 
                 # Update Global History
-                CHAT_HISTORY.append(f"QWEN ACTION: {cmd}\nRESULT: {truncated_output[:500]}...")
+                CHAT_HISTORY.append(f"AGENT ACTION: {cmd}\nRESULT: {truncated_output[:500]}...")
                 save_history()
 
                 # Send OUTPUT to User (with fallback for long messages)
@@ -364,6 +330,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.error(f"Error in turn {turn}: {e}")
             await update.message.reply_text(f"❌ Error: {str(e)}")
             break
+
+async def call_qwen_cli(prompt: str) -> str:
+    """Call the Qwen CLI with the given prompt."""
+    try:
+        # Start Qwen process
+        process = await asyncio.create_subprocess_shell(
+            "qwen",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(input=prompt.encode()),
+            timeout=QWEN_TIMEOUT
+        )
+
+        # Check if stderr has content which might indicate an error
+        if stderr:
+            stderr_content = stderr.decode().strip()
+            if stderr_content:
+                logger.warning(f"Qwen process stderr: {stderr_content}")
+
+        if not stdout:
+            logger.error("Qwen process returned empty stdout")
+            return ""
+
+        response = stdout.decode().strip()
+        return response
+
+    except asyncio.TimeoutError:
+        process.kill()
+        logger.warning("Qwen process timed out")
+        raise Exception("Qwen took too long to respond")
+    except Exception as e:
+        logger.error(f"Error communicating with Qwen: {e}")
+        raise
 
 def main() -> None:
     """Main function to start the Telegram bot."""
