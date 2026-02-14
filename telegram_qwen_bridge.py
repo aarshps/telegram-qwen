@@ -450,7 +450,7 @@ def main() -> None:
         print("For security, set TELEGRAM_ADMIN_ID to your Telegram chat ID.")
 
     try:
-        app = ApplicationBuilder().token(token).job_queue(True).build()
+        app = ApplicationBuilder().token(token).build()
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
