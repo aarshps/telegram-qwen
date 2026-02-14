@@ -108,6 +108,18 @@ async def execute_tool(tool_name, tool_params):
             filepath = filepath.strip()
             content = content.strip()
             
+            # Ensure the file goes into the scripts directory to comply with security
+            import os
+            if not filepath.startswith('scripts/'):
+                # If not already in scripts/, prepend it
+                if os.path.isabs(filepath):
+                    # If it's an absolute path, use only the filename in scripts/
+                    filename = os.path.basename(filepath)
+                    filepath = f"scripts/{filename}"
+                else:
+                    # If it's a relative path, put it in scripts/
+                    filepath = f"scripts/{filepath}"
+            
             # Ensure directory exists
             directory = os.path.dirname(filepath)
             if directory and not os.path.exists(directory):
@@ -144,30 +156,78 @@ async def execute_tool(tool_name, tool_params):
             if os.name == 'nt' and not (command.lower().startswith('cmd') or command.lower().startswith('powershell')):
                 full_command = f'cmd /c {command}'
 
-            process = await asyncio.create_subprocess_shell(
-                full_command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # Increased timeout to 5 minutes
+            # Special handling for cleanup commands
+            if 'cleanup' in command.lower() or 'clean' in command.lower() or 'remove' in command.lower():
+                # Perform cleanup of old files in scripts directory
+                import shutil
+                import glob
+                import time
+                import os
+                
+                # Remove files older than 1 hour from scripts directory
+                current_time = time.time()
+                if os.path.exists('scripts'):
+                    for file_path in glob.glob('scripts/*'):
+                        if os.path.isfile(file_path):
+                            # Check if file is older than 1 hour (3600 seconds)
+                            if current_time - os.path.getmtime(file_path) > 3600:
+                                try:
+                                    os.remove(file_path)
+                                    logger.info(f"Cleaned up old file: {file_path}")
+                                except Exception as e:
+                                    logger.error(f"Error cleaning up file {file_path}: {e}")
+                
+                # Execute the original command
+                process = await asyncio.create_subprocess_shell(
+                    full_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # Increased timeout to 5 minutes
 
-            output = stdout.decode().strip() if stdout else ""
-            error = stderr.decode().strip() if stderr else ""
+                output = stdout.decode().strip() if stdout else ""
+                error = stderr.decode().strip() if stderr else ""
 
-            result = ""
-            if output:
-                result += output
-            if error:
-                result += f"\\nERROR: {error}"
+                result = ""
+                if output:
+                    result += output
+                if error:
+                    result += f"\\nERROR: {error}"
 
-            if not result:
-                result = "Command executed with no output."
+                if not result:
+                    result = "Command executed with no output."
 
-            # Truncate if too long
-            if len(result) > MAX_OUTPUT_LENGTH:
-                result = result[:MAX_OUTPUT_LENGTH] + "\\n...[Output Truncated]"
+                # Truncate if too long
+                if len(result) > MAX_OUTPUT_LENGTH:
+                    result = result[:MAX_OUTPUT_LENGTH] + "\\n...[Output Truncated]"
 
-            return result
+                return result + "\\n\\nNote: Performed automatic cleanup of old files in scripts/ directory."
+            else:
+                # Regular command execution
+                process = await asyncio.create_subprocess_shell(
+                    full_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # Increased timeout to 5 minutes
+
+                output = stdout.decode().strip() if stdout else ""
+                error = stderr.decode().strip() if stderr else ""
+
+                result = ""
+                if output:
+                    result += output
+                if error:
+                    result += f"\\nERROR: {error}"
+
+                if not result:
+                    result = "Command executed with no output."
+
+                # Truncate if too long
+                if len(result) > MAX_OUTPUT_LENGTH:
+                    result = result[:MAX_OUTPUT_LENGTH] + "\\n...[Output Truncated]"
+
+                return result
         except asyncio.TimeoutError:
             return "Command execution timed out after 5 minutes."
         except Exception as e:
@@ -258,6 +318,38 @@ async def send_typing_indicator(context, chat_id):
 
 # Global conversation history to maintain context across all interactions
 CONVERSATION_HISTORY = []
+
+
+async def periodic_cleanup():
+    """Periodically clean up old files in the scripts directory."""
+    import time
+    import os
+    import glob
+    
+    while True:
+        try:
+            # Wait 30 minutes before next cleanup
+            await asyncio.sleep(1800)
+            
+            # Remove files older than 1 hour from scripts directory
+            current_time = time.time()
+            if os.path.exists('scripts'):
+                for file_path in glob.glob('scripts/*'):
+                    if os.path.isfile(file_path):
+                        # Check if file is older than 1 hour (3600 seconds)
+                        if current_time - os.path.getmtime(file_path) > 3600:
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Automatically cleaned up old file: {file_path}")
+                            except Exception as e:
+                                logger.error(f"Error cleaning up file {file_path}: {e}")
+        except asyncio.CancelledError:
+            logger.info("Periodic cleanup task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Error in periodic cleanup: {e}")
+            # Continue running despite errors
+            await asyncio.sleep(1800)  # Wait 30 minutes before retrying
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -360,6 +452,9 @@ def main() -> None:
         print("WARNING: TELEGRAM_ADMIN_ID not set in .env file. Bot will accept messages from any user.")
         print("For security, set TELEGRAM_ADMIN_ID to your Telegram chat ID.")
 
+    # Start the periodic cleanup task
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    
     try:
         app = ApplicationBuilder().token(token).job_queue(None).build()
 
@@ -375,6 +470,13 @@ def main() -> None:
     except Exception as e:
         logger.error(f"Application error: {e}")
         print(f"An error occurred: {e}")
+    finally:
+        # Cancel the cleanup task when shutting down
+        cleanup_task.cancel()
+        try:
+            asyncio.run(asyncio.wait_for(cleanup_task, timeout=1.0))
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass  # Expected when cancelling
 
 
 if __name__ == '__main__':

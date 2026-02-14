@@ -11,6 +11,11 @@ chat_history_*.json
 # Log files
 *.log
 
+# Scripts and temporary files created by agent
+scripts/
+tmp/
+temp/
+
 # OS generated files
 .DS_Store
 Thumbs.db
