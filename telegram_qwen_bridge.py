@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_MESSAGE_LENGTH = 4096
 MAX_OUTPUT_LENGTH = 2000
-QWEN_TIMEOUT = 120
+QWEN_TIMEOUT = 300  # Increased to 5 minutes for longer processing
 
 
 def extract_tool_calls(text):
@@ -149,7 +149,7 @@ async def execute_tool(tool_name, tool_params):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # Increased timeout to 5 minutes
 
             output = stdout.decode().strip() if stdout else ""
             error = stderr.decode().strip() if stderr else ""
@@ -168,6 +168,8 @@ async def execute_tool(tool_name, tool_params):
                 result = result[:MAX_OUTPUT_LENGTH] + "\\n...[Output Truncated]"
 
             return result
+        except asyncio.TimeoutError:
+            return "Command execution timed out after 5 minutes."
         except Exception as e:
             return f"Command execution failed: {e}"
     
