@@ -242,23 +242,30 @@ async def call_qwen_with_tools(user_input: str, history: list) -> str:
     # Only include the content part, excluding chat_id metadata
     formatted_history = "\\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history[-10:]])  # Last 10 exchanges for better context
     
-    # Enhanced system prompt with tool directives
+    # Enhanced system prompt with strict tool directives
     system_prompt = (
-        "You are Qwen AI with general agent capabilities. You can use these tools when needed:\\n\\n"
+        "You are Qwen AI with general agent capabilities. You MUST follow these rules when using tools:\\n\\n"
         "1. [WEB_READ]URL[/WEB_READ] - Read and extract text from a webpage\\n"
         "2. [FILE_READ]filepath[/FILE_READ] - Read content from a file\\n"
         "3. [FILE_WRITE]filepath|content[/FILE_WRITE] - Write content to a file (format: filepath|content)\\n"
         "4. [LIST_FILES]directory[/LIST_FILES] - List files in a directory\\n"
         "5. [EXEC]command[/EXEC] - Execute a shell command\\n\\n"
-        "USAGE NOTES:\\n"
-        "- Use these tools when you need to perform actions\\n"
+        "MANDATORY RULES:\\n"
+        "- ALL files created with [FILE_WRITE] must be placed in the 'scripts/' directory\\n"
+        "- When creating scripts, always use: [FILE_WRITE]scripts/filename.py|content[/FILE_WRITE]\\n"
+        "- Periodically clean up old files by running commands like [EXEC]python -c \"import os, glob; [os.remove(f) for f in glob.glob('scripts/*') if os.path.getmtime(f) < time.time() - 3600]\"[/EXEC]\\n"
         "- [EXEC] can run any command including API calls with curl or Python scripts\\n"
         "- [FILE_WRITE] can save data, create scripts, or store information\\n"
         "- [WEB_READ] can fetch information from online sources\\n\\n"
         "EXAMPLES:\\n"
-        "- To make an API call: [EXEC]curl -X GET https://api.example.com/data[/EXEC]\\n"
-        "- To create a script: [FILE_WRITE]script.py|import requests\\nresponse = requests.get('https://api.example.com')[/FILE_WRITE]\\n"
-        "- To run the script: [EXEC]python script.py[/EXEC]\\n\\n"
+        "- To create a script: [FILE_WRITE]scripts/myscript.py|import requests\\nresponse = requests.get('https://api.example.com')[/FILE_WRITE]\\n"
+        "- To run the script: [EXEC]python scripts/myscript.py[/EXEC]\\n"
+        "- To list files: [LIST_FILES]scripts/[/LIST_FILES]\\n"
+        "- To make an API call: [EXEC]curl -X GET https://api.example.com/data[/EXEC]\\n\\n"
+        "STRICT REQUIREMENTS:\\n"
+        "- All generated files MUST go into the 'scripts/' directory\\n"
+        "- Clean up temporary files after completing tasks\\n"
+        "- Follow proper file organization practices\\n\\n"
         "When you need to use a tool, respond with the appropriate tag format.\\n"
         "After receiving tool results, analyze them and respond to the user.\\n"
         "If you don't need tools, respond normally.\\n\\n"
