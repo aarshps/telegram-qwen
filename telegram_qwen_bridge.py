@@ -444,8 +444,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(welcome_message)
 
 
-def main() -> None:
-    """Main function to start the Telegram bot."""
+async def main_async() -> None:
+    """Async main function to start the Telegram bot."""
     load_dotenv()
 
     token = os.environ.get('TELEGRAM_BOT_TOKEN')
@@ -481,9 +481,15 @@ def main() -> None:
         # Cancel the cleanup task when shutting down
         cleanup_task.cancel()
         try:
-            asyncio.run(asyncio.wait_for(cleanup_task, timeout=1.0))
+            await asyncio.wait_for(cleanup_task, timeout=1.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass  # Expected when cancelling
+
+
+def main() -> None:
+    """Main function to start the Telegram bot."""
+    # Run the async main function
+    asyncio.run(main_async())
 
 
 if __name__ == '__main__':
