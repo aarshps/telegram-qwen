@@ -178,8 +178,9 @@ async def execute_tool(tool_name, tool_params):
 
 async def call_qwen_with_tools(user_input: str, history: list) -> str:
     """Call the Qwen CLI with tools available."""
-    # Format the conversation history for Qwen (only include recent exchanges)
-    formatted_history = "\\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history[-4:]])  # Only last 4 exchanges
+    # Format the conversation history for Qwen (include more exchanges for better context)
+    # Only include the content part, excluding chat_id metadata
+    formatted_history = "\\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history[-10:]])  # Last 10 exchanges for better context
     
     # Enhanced system prompt with tool directives
     system_prompt = (
@@ -255,6 +256,10 @@ async def send_typing_indicator(context, chat_id):
         raise  # Re-raise the cancellation
 
 
+# Global conversation history to maintain context across all interactions
+CONVERSATION_HISTORY = []
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages and forward to Qwen with tool support."""
     user_message = update.message.text
@@ -268,11 +273,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     logger.info(f"Processing message from user {update.effective_user.id}: {user_message}")
 
-    # Start with a fresh history for each message (no persistent memory)
-    history = []
-    
-    # Add user message to history
-    history.append({"role": "user", "content": user_message})
+    # Add user message to global conversation history
+    CONVERSATION_HISTORY.append({"role": "user", "content": user_message, "chat_id": chat_id})
     
     max_turns = 3  # Maximum number of tool calls per request
     current_input = user_message
@@ -282,8 +284,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         for turn in range(max_turns):
-            # Call Qwen with the current context
-            qwen_response = await call_qwen_with_tools(current_input, history)
+            # Call Qwen with the full conversation context
+            qwen_response = await call_qwen_with_tools(current_input, CONVERSATION_HISTORY)
             
             # Check if Qwen wants to use a tool
             tool_name, tool_params = extract_tool_calls(qwen_response)
@@ -292,9 +294,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 # Execute the tool
                 tool_result = await execute_tool(tool_name, tool_params)
                 
-                # Add tool call and result to history
-                history.append({"role": "assistant", "content": qwen_response})
-                history.append({"role": "tool_result", "content": tool_result})
+                # Add tool call and result to global conversation history
+                CONVERSATION_HISTORY.append({"role": "assistant", "content": qwen_response, "chat_id": chat_id})
+                CONVERSATION_HISTORY.append({"role": "tool_result", "content": tool_result, "chat_id": chat_id})
                 
                 # Prepare for next iteration with tool result
                 current_input = f"Tool result: {tool_result}"
@@ -306,6 +308,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 else:
                     # This is the last turn, send whatever response we have
                     final_response = qwen_response
+                
+                # Add final response to global conversation history
+                CONVERSATION_HISTORY.append({"role": "assistant", "content": final_response, "chat_id": chat_id})
                 
                 # Send response back to user (split if too long)
                 if len(final_response) <= MAX_MESSAGE_LENGTH:
