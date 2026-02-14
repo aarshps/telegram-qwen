@@ -1,11 +1,12 @@
 # Telegram-Qwen Bridge
 
-A simple bot that connects Telegram with the Qwen AI model, allowing you to interact with Qwen through Telegram messages.
+A bot that connects Telegram with the Qwen AI model, allowing you to interact with Qwen through Telegram messages. The bot includes general agent capabilities for web browsing, file operations, and command execution.
 
 ## Features
 
 - **Telegram Bot Integration**: Interact with Qwen AI via Telegram
 - **Qwen AI Integration**: Leverage the power of Qwen for intelligent responses
+- **General Agent Capabilities**: Web browsing, file operations, command execution, and API calls
 - **Authorization**: Restrict access to authorized users only
 
 ## Prerequisites
@@ -79,7 +80,7 @@ A simple bot that connects Telegram with the Qwen AI model, allowing you to inte
 
 - `/start` - Display welcome message and usage instructions
 
-The bot responds to all text messages by forwarding them to Qwen.
+The bot responds to all text messages by forwarding them to Qwen with agent capabilities.
 
 ## Security Considerations
 
@@ -95,6 +96,7 @@ The bot responds to all text messages by forwarding them to Qwen.
 
 1. **Bot not responding**: Check that your bot token is correct and the bot is added to a chat
 2. **Qwen not found**: Make sure Qwen CLI is installed and accessible from your PATH
+3. **Tool execution fails**: Check that the requested file paths or URLs are accessible and properly formatted
 
 ### Logs
 
@@ -152,4 +154,4 @@ See the [Contributing Guide](docs/contributing.md) for detailed information on h
 
 ## Disclaimer
 
-This tool connects Telegram to Qwen AI. Use responsibly and only grant access to trusted individuals. The authors are not responsible for any damage caused by misuse of this tool.
+This tool connects Telegram to Qwen AI with general agent capabilities including file system access and command execution. Use responsibly and only grant access to trusted individuals. The authors are not responsible for any damage caused by misuse of this tool.
