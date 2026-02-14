@@ -1,16 +1,14 @@
 # Telegram-Qwen Bridge
 
-A Python bot that connects Telegram with the Qwen AI model, allowing you to interact with your computer through Telegram messages. The bot can execute commands, perform agentic tasks, and maintain conversation history.
+A Python bot that connects Telegram with the Qwen AI model, allowing you to interact with Qwen through Telegram messages. The bot includes agent capabilities for web browsing, file operations, and command execution.
 
 ## Features
 
-- **Telegram Bot Integration**: Control your computer remotely via Telegram
-- **Qwen AI Integration**: Leverage the power of Qwen for intelligent command execution
-- **Command Execution**: Run shell commands securely with authorization
-- **Agentic Capabilities**: Qwen can perform multi-step tasks autonomously
-- **Web Reading**: Built-in web reader tool for research
-- **Chat History**: Persistent conversation history
-- **Audit Logging**: Track all bot activities
+- **Telegram Bot Integration**: Interact with Qwen AI via Telegram
+- **Qwen AI Integration**: Leverage the power of Qwen for intelligent responses
+- **Agent Capabilities**: Web browsing, file operations, and command execution
+- **Fresh Sessions**: Clean slate on each restart, no persistent memory
+- **Authorization**: Restrict access to authorized users only
 
 ## Prerequisites
 
@@ -82,53 +80,8 @@ A Python bot that connects Telegram with the Qwen AI model, allowing you to inte
 ### Available Commands
 
 - `/start` - Display welcome message and usage instructions
-- `/id` - Get your Telegram chat ID
-- `/exec <command>` - Execute a shell command on the host computer
-- `/reset` - Clear the chat history and reset memory
 
-### Agentic Capabilities
-
-The bot supports agentic behavior where Qwen can:
-- Execute shell commands using `[EXEC]command[/EXEC]` format
-- Read web pages using the web reader tool
-- Perform multi-step tasks autonomously
-- Maintain context across conversations
-
-Example of agentic behavior:
-```
-Can you list the files in my home directory and then show me the content of a specific file?
-```
-
-Qwen might respond with:
-```
-[EXEC]ls ~[/EXEC]
-```
-
-After receiving the output, it might follow up with:
-```
-[EXEC]cat ~/specific_file.txt[/EXEC]
-```
-
-## Tools Available to Qwen
-
-The bot provides these tools to Qwen:
-
-1. **Shell Commands**: `[EXEC]command[/EXEC]` - Execute any shell command
-2. **Web Reader**: `[EXEC]python tools/web_reader.py <URL>[/EXEC]` - Read and extract text from web pages
-3. **Python Scripts**: `[EXEC]python -c "..."[/EXEC]` - Run Python code snippets
-
-## Web Reader Tool
-
-The web reader tool (`tools/web_reader.py`) allows Qwen to read and extract text content from web pages. It handles:
-- HTML parsing and text extraction
-- Common HTML tags filtering (scripts, styles, etc.)
-- UTF-8 encoding handling
-- Content length limiting to prevent overload
-
-Usage within Qwen prompts:
-```
-[EXEC]python tools/web_reader.py https://example.com[/EXEC]
-```
+The bot responds to all text messages by forwarding them to Qwen with agent capabilities.
 
 ## Security Considerations
 
@@ -143,14 +96,12 @@ Usage within Qwen prompts:
 ### Common Issues
 
 1. **Bot not responding**: Check that your bot token is correct and the bot is added to a chat
-2. **Command execution fails**: Ensure the commands are valid for your operating system
-3. **Qwen not found**: Make sure Qwen CLI is installed and accessible from your PATH
-4. **Permission errors**: Check that the bot has necessary permissions to execute commands
+2. **Qwen not found**: Make sure Qwen CLI is installed and accessible from your PATH
+3. **Tool execution fails**: Check that the requested file paths or URLs are accessible and properly formatted
 
 ### Logs
 
-- Chat history is stored in `chat_history.json`
-- Audit logs are stored in `audit.log`
+- No chat history is stored between sessions
 - Application logs are printed to the console
 
 ## Documentation
@@ -184,8 +135,6 @@ See the [Contributing Guide](docs/contributing.md) for detailed information on h
 ```
 telegram-qwen/
 ├── telegram_qwen_bridge.py    # Main bot application
-├── tools/
-│   └── web_reader.py         # Web content extraction tool
 ├── docs/                     # Documentation files
 ├── requirements.txt          # Python dependencies
 ├── .env.example             # Example environment variables
@@ -207,4 +156,4 @@ See the [Contributing Guide](docs/contributing.md) for detailed information on h
 
 ## Disclaimer
 
-This tool executes commands on your computer. Use responsibly and only grant access to trusted individuals. The authors are not responsible for any damage caused by misuse of this tool.
+This tool connects Telegram to Qwen AI with agent capabilities including file system access and command execution. Use responsibly and only grant access to trusted individuals. The authors are not responsible for any damage caused by misuse of this tool.

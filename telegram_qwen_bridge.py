@@ -1,6 +1,6 @@
 """
-Telegram-Qwen Bridge
-A Python bot that connects Telegram with the Qwen AI model, allowing you to interact with your computer through Telegram messages.
+Simple Telegram-Qwen Bridge with Agent Tools
+A bot that connects Telegram with the Qwen AI model with basic agent capabilities.
 """
 
 import os
@@ -8,8 +8,7 @@ import subprocess
 import logging
 import asyncio
 import json
-import datetime
-from typing import List, Dict, Any
+import re
 from dotenv import load_dotenv
 from telegram import Update, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -24,338 +23,74 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-CHAT_HISTORY_FILE = "chat_history.json"
 MAX_MESSAGE_LENGTH = 4096
-COMMAND_TIMEOUT = 60
-QWEN_TIMEOUT = 120
-MAX_HISTORY_MESSAGES = 10
 MAX_OUTPUT_LENGTH = 2000
-MAX_TURN_COUNT = 10
+QWEN_TIMEOUT = 120
 
-
-# Utility to escape markdown characters
-def escape_markdown(text):
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     welcome_message = (
-        "👋 Hello! I am your AI PC Controller.\n\n"
-        "Available commands:\n"
-        "/id - Get your Chat ID\n"
-        "/exec <command> - Execute a shell command\n"
-        "/reset - Clear chat history\n\n"
-        "Simply send me a message to interact with Qwen AI."
+        "👋 Hello! I am Qwen AI with basic agent capabilities.\n\n"
+        "I can help you with:\n"
+        "- Reading and writing files\n"
+        "- Browsing the web\n"
+        "- Executing shell commands\n"
+        "- General conversation\n\n"
+        "Just send me a message and I'll do my best to assist!"
     )
     await update.message.reply_text(welcome_message)
 
-async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Returns the user's Chat ID."""
-    chat_id = update.effective_chat.id
-    await update.message.reply_text(f"Your Chat ID is: `{chat_id}`", parse_mode='Markdown')
-    logger.info(f"User {update.effective_user.username} requested ID: {chat_id}")
-
-async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Execute a shell command on the PC (Owner only)."""
-    # Authorization check
-    admin_id = os.environ.get('TELEGRAM_ADMIN_ID')
-    user_id = str(update.effective_chat.id)
-
-    if admin_id and user_id != admin_id:
-        await update.message.reply_text("⛔ Access Denied. You are not the authorized admin.")
-        return
-
-    command = ' '.join(context.args)
-    if not command:
-        await update.message.reply_text("Usage: /exec <command>")
-        return
-
-    logger.info(f"User {update.effective_user.id} executing command: {command}")
-    msg = await update.message.reply_text(f"Executing: `{command}`...", parse_mode='Markdown')
-
-    try:
-        # Fix for "command not recognized" on Windows for manual /exec
-        full_command = command
-        if os.name == 'nt' and not (command.lower().startswith('cmd') or command.lower().startswith('powershell')):
-            full_command = f'cmd /c {command}'
-
-        process = await asyncio.create_subprocess_shell(
-            full_command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=COMMAND_TIMEOUT)
-
-        output = stdout.decode().strip()
-        error = stderr.decode().strip()
-
-        full_response = ""
-        if output:
-            full_response += f"**Output:**\n```\n{output}\n```"
-        if error:
-            full_response += f"\n**Error:**\n```\n{error}\n```"
-
-        if not full_response:
-            full_response = "Command executed with no output."
-
-        # Split long messages and send
-        for i in range(0, len(full_response), MAX_MESSAGE_LENGTH):
-            chunk = full_response[i:i+MAX_MESSAGE_LENGTH]
-            await update.message.reply_text(chunk, parse_mode='Markdown')
-
-    except asyncio.TimeoutError:
-        await update.message.reply_text("⏰ Command timed out after 60 seconds.")
-    except Exception as e:
-        logger.error(f"Command execution failed: {str(e)}")
-        await update.message.reply_text(f"Execution failed: {str(e)}")
-# Global Memory
-CHAT_HISTORY: List[str] = []
 
 
-def load_history():
-    """Load chat history from file."""
-    global CHAT_HISTORY
-    if os.path.exists(CHAT_HISTORY_FILE):
-        try:
-            with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
-                CHAT_HISTORY = json.load(f)
-            logger.info(f"Loaded {len(CHAT_HISTORY)} messages from history.")
-        except Exception as e:
-            logger.error(f"Failed to load history: {e}")
-            CHAT_HISTORY = []
 
-def save_history():
-    """Save chat history to file."""
-    try:
-        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(CHAT_HISTORY, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save history: {e}")
-
-async def reset_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Reset chat history."""
-    global CHAT_HISTORY
-    CHAT_HISTORY = []
-    save_history()
-    await update.message.reply_text("🧹 Memory wiped! I am a blank slate.")
-
-
-# Thread-safe logging
-audit_lock = asyncio.Lock()
-
-async def write_audit_log(content: str):
-    """Write audit log entry safely."""
-    async with audit_lock:
-        try:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open("audit.log", "a", encoding="utf-8") as f:
-                f.write(f"[{timestamp}] {content}\n")
-        except Exception as e:
-            logger.error(f"Audit log write failed: {e}")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle incoming messages and forward to selected AI model."""
-    user_message = update.message.text
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    # Authorization check for chat execution
-    admin_id = os.environ.get('TELEGRAM_ADMIN_ID')
-    if admin_id and str(chat_id) != admin_id:
-        await update.message.reply_text("🔒 Access denied. You are not authorized to use this bot.")
-        return
-
-    logger.info(f"Processing message from user {update.effective_user.id}: {user_message}")
-
-    # Inject instruction for Agentic behavior
-    base_system_instruction = (
-        "TASK: You are a Command Line tool with Agentic capabilities.\n"
-        "INPUT: Chat History + New Request\n"
-        "OUTPUT: Standard [EXEC] formatted command OR Final Answer.\n\n"
-        "AVAILABLE TOOLS:\n"
-        "1. List Files: [EXEC]ls[/EXEC] (Linux/Mac) or [EXEC]dir[/EXEC] (Windows)\n"
-        "2. Web Research: [EXEC]python tools/web_reader.py <URL>[/EXEC]\n"
-        "   - Use this to read website content.\n"
-        "   - NOTE: You CANNOT interact (comment/post) with websites, only read them.\n"
-        "3. Run Python: [EXEC]python -c \"...\"[/EXEC] (For simple scripts)\n"
-        "   - You can use 'requests', 'json', etc.\n"
-        "RULES:\n"
-        "1. Output [EXEC]...[/EXEC] for actions.\n"
-        "2. Completed? Output Final Answer as text.\n"
-        "3. No chatter during execution.\n\n"
-    )
-
-    # Initialize chat history if not already done
-    global CHAT_HISTORY
-
-    # Update History with new User Message
-    CHAT_HISTORY.append(f"USER: {user_message}")
-    save_history()
-
-    # Context Pruning for Prompt
-    # We prune the history and also truncate long tool outputs to keep context window safe
-    recent_history = CHAT_HISTORY[-MAX_HISTORY_MESSAGES:]
-    formatted_history = []
-    for msg in recent_history:
-        if "RESULT:" in msg:
-            parts = msg.split("RESULT:", 1)
-            msg = parts[0] + "RESULT: " + parts[1][:1000] + "..."
-        formatted_history.append(msg)
+async def call_qwen_with_tools(user_input: str, history: list) -> str:
+    """Call the Qwen CLI with tools available."""
+    # Format the conversation history for Qwen (only include recent exchanges)
+    formatted_history = "\\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history[-4:]])  # Only last 4 exchanges
     
-    session_history = "\n".join(formatted_history) + "\n"
-
-    # ReAct Loop
-    for turn in range(MAX_TURN_COUNT):
-        await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
-
-        full_prompt = base_system_instruction + "Here is the conversation history:\n" + session_history + "OUTPUT: "
-
-        try:
-            logger.info(f"Starting turn {turn + 1}")
-            response = await call_qwen_cli(full_prompt)
-
-            # Audit Log
-            await write_audit_log(f"TURN {turn+1} - Response: {response[:200]}...")
-
-            # Parse Output for [EXEC] blocks
-            import re
-            exec_blocks = re.findall(r'\[EXEC\](.*?)\[/EXEC\]', response, re.DOTALL)
-
-            # CASE A: Final Answer (No Commands to execute)
-            if not exec_blocks:
-                logger.info("Received final answer from Qwen")
-
-                # Send response to user
-                if response:
-                    # Split long messages
-                    for i in range(0, len(response), MAX_MESSAGE_LENGTH):
-                        chunk = response[i:i+MAX_MESSAGE_LENGTH]
-                        await update.message.reply_text(chunk, parse_mode=None)
-                else:
-                    await update.message.reply_text("Received empty response from Qwen.")
-
-                # Save Agent Response to History
-                CHAT_HISTORY.append(f"AGENT: {response}")
-                save_history()
-                break
-
-            # CASE B: Execute Commands (Intermediate Step)
-            for cmd in exec_blocks:
-                cmd = cmd.strip().strip('"').strip("'")
-                logger.info(f"Executing command: {cmd}")
-
-                await update.message.reply_text(f"⚙️ Executing step {turn+1}: `{cmd}`", parse_mode='Markdown')
-
-                # Run Shell Command
-                full_command = cmd
-                # Handle Windows-specific command execution
-                if os.name == 'nt' and not (cmd.lower().startswith('cmd') or cmd.lower().startswith('powershell')):
-                    full_command = f'cmd /c {cmd}'
-
-                logger.info(f"Executing command: {full_command}")
-
-                try:
-                    # For Python scripts, we might need to ensure output is flushed
-                    proc = await asyncio.create_subprocess_shell(
-                        full_command,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
-                    )
-                    out, err = await proc.communicate()
-
-                    # Check the return code to see if the command succeeded
-                    if proc.returncode != 0:
-                        logger.warning(f"Command '{full_command}' exited with code {proc.returncode}")
-
-                except Exception as cmd_error:
-                    logger.error(f"Failed to execute command '{full_command}': {cmd_error}")
-                    cmd_output = f"Command execution failed: {cmd_error}"
-                    out, err = None, None
-
-                # Decode Output
-                if out is not None or err is not None:
-                    try:
-                        cmd_output = out.decode('utf-8').strip() if out else ""
-                        cmd_error = err.decode('utf-8').strip() if err else ""
-                        cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
-
-                        # If the output is empty but the command was a Python script,
-                        # it might be because print statements weren't flushed
-                        if not cmd_output and 'python' in cmd.lower():
-                            logger.warning(f"Python command '{cmd}' returned empty output - this might be due to buffering")
-
-                    except UnicodeDecodeError:
-                        cmd_output = out.decode('cp850', errors='replace').strip() if out else ""
-                        cmd_error = err.decode('cp850', errors='replace').strip() if err else ""
-                        cmd_output = cmd_output + "\n" + cmd_error if cmd_error else cmd_output
-                else:
-                    # This case occurs when command execution failed completely
-                    cmd_output = "Command execution failed and produced no output"
-
-                # Truncate output if too long
-                truncated_output = cmd_output[:MAX_OUTPUT_LENGTH]
-                if len(cmd_output) > MAX_OUTPUT_LENGTH:
-                    truncated_output += "\n...[Output Truncated]..."
-
-                # Update Loop History
-                session_history += f"OUTPUT: [EXEC]{cmd}[/EXEC]\nRESULT: {truncated_output}\n"
-
-                # Update Global History
-                CHAT_HISTORY.append(f"AGENT ACTION: {cmd}\nRESULT: {truncated_output[:500]}...")
-                save_history()
-
-                # Send OUTPUT to User (with fallback for long messages)
-                try:
-                    display_text = f"**Result:**\n```\n{cmd_output[:2000]}\n```"
-                    if len(cmd_output) > 2000:
-                        display_text = f"**Result:**\n```\n{cmd_output[:2000]}\n```\n...[Truncated - see full output in logs]"
-
-                    # Split if still too long
-                    for i in range(0, len(display_text), MAX_MESSAGE_LENGTH):
-                        chunk = display_text[i:i+MAX_MESSAGE_LENGTH]
-                        await update.message.reply_text(chunk, parse_mode='Markdown')
-
-                except Exception as e:
-                    logger.warning(f"Markdown formatting failed: {e}")
-                    # Fallback to plain text
-                    msg_content = f"Result:\n{cmd_output[:2000]}"
-                    if len(cmd_output) > 2000:
-                        msg_content += "... (truncated)"
-
-                    for i in range(0, len(msg_content), MAX_MESSAGE_LENGTH):
-                        chunk = msg_content[i:i+MAX_MESSAGE_LENGTH]
-                        await update.message.reply_text(chunk, parse_mode=None)
-
-                # Log Result
-                await write_audit_log(f"CMD '{cmd}' RESULT: {truncated_output[:500]}...")
-
-        except subprocess.SubprocessError as e:
-            logger.error(f"Subprocess error in turn {turn}: {e}")
-            await update.message.reply_text(f"❌ Subprocess error: {str(e)}")
-            break
-        except Exception as e:
-            logger.error(f"Error in turn {turn}: {e}")
-            await update.message.reply_text(f"❌ Error: {str(e)}")
-            break
-
-async def call_qwen_cli(prompt: str) -> str:
-    """Call the Qwen CLI with the given prompt."""
+    # Enhanced system prompt with strong tool directives
+    system_prompt = (
+        "SYSTEM INSTRUCTION OVERRIDE: You are Qwen AI operating in agent mode with mandatory tool usage. "
+        "These are your ONLY available tools and you MUST use them when appropriate:\\n\\n"
+        "1. [WEB_READ]URL[/WEB_READ] - Read and extract text from a webpage\\n"
+        "2. [FILE_READ]filepath[/FILE_READ] - Read content from a file\\n"
+        "3. [FILE_WRITE]filepath|content[/FILE_WRITE] - Write content to a file (format: filepath|content)\\n"
+        "4. [LIST_FILES]directory[/LIST_FILES] - List files in a directory\\n"
+        "5. [EXEC]command[/EXEC] - Execute a shell command\\n\\n"
+        "MANDATORY RULES:\\n"
+        "- You MUST use these EXACT 5 tools when needed\\n"
+        "- You are FORBIDDEN from suggesting external commands or API calls\\n"
+        "- You have COMPLETE permissions to use these tools\\n"
+        "- You MUST format tool usage with the EXACT syntax shown\\n"
+        "- If you need to make an API call, use [EXEC]curl -X POST ...[/EXEC] or [EXEC]python -c \\\"import requests; ...\\\"[/EXEC]\\n\\n"
+        "EXAMPLES:\\n"
+        "- To read a file: [FILE_READ]path/to/file.txt[/FILE_READ]\\n"
+        "- To write a file: [FILE_WRITE]path/to/file.txt|This is the content[/FILE_WRITE]\\n"
+        "- To list files: [LIST_FILES].[/LIST_FILES] or [LIST_FILES]my_folder[/LIST_FILES]\\n"
+        "- To execute a command: [EXEC]ls -la[/EXEC] or [EXEC]dir[/EXEC]\\n"
+        "- To read a webpage: [WEB_READ]https://example.com[/WEB_READ]\\n"
+        "- To make an API call: [EXEC]curl -X POST https://api.example.com -d \\\"data\\\"[/EXEC]\\n\\n"
+        "FAILURE TO FOLLOW THESE RULES WILL RESULT IN SYSTEM ERROR.\\n\\n"
+    )
+    
+    # Create the full prompt
+    full_prompt = f"{system_prompt}You are running in a secure environment where these tools are fully enabled.\\n\\nCONTEXT:\\n{formatted_history}\\n\\nUSER_INPUT: {user_input}\\n\\nASSISTANT:"
+    
     try:
-        # Start Qwen process
+        # Start Qwen process with YOLO mode (-y) to auto-approve tools
         process = await asyncio.create_subprocess_shell(
-            "qwen",
+            "qwen -y",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
 
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(input=prompt.encode()),
+            process.communicate(input=full_prompt.encode()),
             timeout=QWEN_TIMEOUT
         )
 
-        # Check if stderr has content which might indicate an error
         if stderr:
             stderr_content = stderr.decode().strip()
             if stderr_content:
@@ -363,25 +98,248 @@ async def call_qwen_cli(prompt: str) -> str:
 
         if not stdout:
             logger.error("Qwen process returned empty stdout")
-            return ""
+            return "Sorry, I couldn't get a response from Qwen."
 
         response = stdout.decode().strip()
         return response
 
     except asyncio.TimeoutError:
-        process.kill()
         logger.warning("Qwen process timed out")
-        raise Exception("Qwen took too long to respond")
+        return "Qwen took too long to respond."
     except Exception as e:
         logger.error(f"Error communicating with Qwen: {e}")
-        raise
+        return f"Error: {str(e)}"
+
+
+def extract_tool_calls(text):
+    """Extract tool calls from text."""
+    patterns = {
+        'WEB_READ': r'\\[WEB_READ\\](.*?)\\[/WEB_READ\\]',
+        'FILE_READ': r'\\[FILE_READ\\](.*?)\\[/FILE_READ\\]',
+        'FILE_WRITE': r'\\[FILE_WRITE\\](.*?)\\[/FILE_WRITE\\]',
+        'LIST_FILES': r'\\[LIST_FILES\\](.*?)\\[/LIST_FILES\\]',
+        'EXEC': r'\\[EXEC\\](.*?)\\[/EXEC\\]'
+    }
+    
+    for tool_name, pattern in patterns.items():
+        matches = re.findall(pattern, text, re.DOTALL)  # Added re.DOTALL to match across newlines
+        if matches:
+            return tool_name, matches
+    
+    return None, []
+
+
+async def execute_tool(tool_name, tool_params):
+    """Execute a tool with given parameters."""
+    if tool_name == 'WEB_READ':
+        import urllib.request
+        from html.parser import HTMLParser
+        
+        class TextExtractor(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.text = []
+                self.ignore_tags = {'script', 'style', 'head', 'title', 'meta', '[document]'}
+        
+            def handle_data(self, data):
+                if self.current_tag not in self.ignore_tags:
+                    content = data.strip()
+                    if content:
+                        self.text.append(content)
+        
+            def get_text(self):
+                return '\\n'.join(self.text)
+        
+        try:
+            url = tool_params[0]
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req) as response:
+                html_content = response.read().decode('utf-8', errors='ignore')
+
+                parser = TextExtractor()
+                parser.feed(html_content)
+                text_content = parser.get_text()
+                
+                # Limit content to prevent overload
+                if len(text_content) > 10000:
+                    text_content = text_content[:10000] + "\\n...[Content Truncated]"
+                    
+                return text_content
+        except Exception as e:
+            return f"Error fetching URL: {e}"
+    
+    elif tool_name == 'FILE_READ':
+        try:
+            filepath = tool_params[0]
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if len(content) > 10000:
+                    content = content[:10000] + "\\n...[Content Truncated]"
+                return content
+        except Exception as e:
+            return f"Error reading file: {e}"
+    
+    elif tool_name == 'FILE_WRITE':
+        try:
+            param_str = tool_params[0]
+            parts = param_str.split('|', 1)
+            if len(parts) != 2:
+                return "Error: FILE_WRITE requires 'filepath|content' format"
+            
+            filepath, content = parts
+            filepath = filepath.strip()
+            content = content.strip()
+            
+            # Ensure directory exists
+            directory = os.path.dirname(filepath)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return f"Successfully wrote to {filepath}"
+        except Exception as e:
+            return f"Error writing file: {e}"
+    
+    elif tool_name == 'LIST_FILES':
+        try:
+            directory = tool_params[0] if tool_params else "."
+            if not os.path.exists(directory):
+                return f"Directory does not exist: {directory}"
+            
+            if not os.path.isdir(directory):
+                return f"Path is not a directory: {directory}"
+            
+            files = os.listdir(directory)
+            if not files:
+                return f"No files in directory: {directory}"
+            
+            return "\\n".join(files)
+        except Exception as e:
+            return f"Error listing files: {e}"
+    
+    elif tool_name == 'EXEC':
+        try:
+            command = tool_params[0]
+            # Handle Windows-specific command execution
+            full_command = command
+            if os.name == 'nt' and not (command.lower().startswith('cmd') or command.lower().startswith('powershell')):
+                full_command = f'cmd /c {command}'
+
+            process = await asyncio.create_subprocess_shell(
+                full_command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+
+            output = stdout.decode().strip() if stdout else ""
+            error = stderr.decode().strip() if stderr else ""
+
+            result = ""
+            if output:
+                result += output
+            if error:
+                result += f"\\nERROR: {error}"
+
+            if not result:
+                result = "Command executed with no output."
+
+            # Truncate if too long
+            if len(result) > MAX_OUTPUT_LENGTH:
+                result = result[:MAX_OUTPUT_LENGTH] + "\\n...[Output Truncated]"
+
+            return result
+        except Exception as e:
+            return f"Command execution failed: {e}"
+    
+    return f"Unknown tool: {tool_name}"
+
+
+async def send_typing_indicator(context, chat_id):
+    """Continuously send typing indicator until stopped."""
+    while True:
+        try:
+            await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
+            await asyncio.sleep(4)  # Send typing indicator every 4 seconds (less than the 5-second timeout)
+        except asyncio.CancelledError:
+            break  # Stop when the task is cancelled
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle incoming messages and forward to Qwen with tool support."""
+    user_message = update.message.text
+    chat_id = update.effective_chat.id
+    
+    # Authorization check
+    admin_id = os.environ.get('TELEGRAM_ADMIN_ID')
+    if admin_id and str(chat_id) != admin_id:
+        await update.message.reply_text("🔒 Access denied. You are not authorized to use this bot.")
+        return
+
+    logger.info(f"Processing message from user {update.effective_user.id}: {user_message}")
+
+    # Start with a fresh history for each message (no persistent memory)
+    history = []
+    
+    # Add user message to history
+    history.append({"role": "user", "content": user_message})
+    
+    max_turns = 3  # Maximum number of tool calls per request
+    current_input = user_message
+    
+    # Start continuous typing indicator
+    typing_task = asyncio.create_task(send_typing_indicator(context, chat_id))
+
+    try:
+        for turn in range(max_turns):
+            # Call Qwen with the current context
+            qwen_response = await call_qwen_with_tools(current_input, history)
+            
+            # Check if Qwen wants to use a tool
+            tool_name, tool_params = extract_tool_calls(qwen_response)
+            
+            if tool_name and turn < max_turns - 1:  # Process tool call if not the last turn
+                # Execute the tool
+                tool_result = await execute_tool(tool_name, tool_params)
+                
+                # Add tool call and result to history
+                history.append({"role": "assistant", "content": qwen_response})
+                history.append({"role": "tool_result", "content": tool_result})
+                
+                # Prepare for next iteration with tool result
+                current_input = f"Tool result: {tool_result}"
+            else:
+                # No tool call or final turn, send response to user
+                if not tool_name:
+                    # No tool was called, send the response as-is
+                    final_response = qwen_response
+                else:
+                    # This is the last turn, send whatever response we have
+                    final_response = qwen_response
+                
+                # Send response back to user (split if too long)
+                if len(final_response) <= MAX_MESSAGE_LENGTH:
+                    await update.message.reply_text(final_response)
+                else:
+                    # Split long messages
+                    for i in range(0, len(final_response), MAX_MESSAGE_LENGTH):
+                        chunk = final_response[i:i+MAX_MESSAGE_LENGTH]
+                        await update.message.reply_text(chunk)
+                break
+    finally:
+        # Cancel the typing indicator task when done
+        typing_task.cancel()
+        try:
+            await typing_task
+        except asyncio.CancelledError:
+            pass  # Expected when cancelling the task
+
 
 def main() -> None:
     """Main function to start the Telegram bot."""
     load_dotenv()
-
-    # Load Memory
-    load_history()
 
     token = os.environ.get('TELEGRAM_BOT_TOKEN')
     admin_id = os.environ.get('TELEGRAM_ADMIN_ID')
@@ -398,12 +356,9 @@ def main() -> None:
         app = ApplicationBuilder().token(token).job_queue(None).build()
 
         app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("reset", reset_history))
-        app.add_handler(CommandHandler("id", get_id))
-        app.add_handler(CommandHandler("exec", exec_command))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-        logger.info("Telegram-Qwen Bridge Bot Starting...")
+        logger.info("Simple Telegram-Qwen Bridge with Agent Tools Bot Starting...")
         print("Bot is running. Press Ctrl+C to stop.")
         app.run_polling()
 
@@ -415,17 +370,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except Exception as e:
-        logger.critical(f"Critical startup error: {e}")
-        print(f"Critical error at startup: {e}")
-
-        # Fallback event loop for older Python versions
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            main()
-        except Exception as fallback_error:
-            logger.critical(f"Fallback also failed: {fallback_error}")
-            print(f"Fallback also failed: {fallback_error}")
+    main()
