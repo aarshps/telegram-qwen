@@ -327,36 +327,6 @@ async def send_typing_indicator(context, chat_id):
 CONVERSATION_HISTORY = []
 
 
-async def periodic_cleanup():
-    """Periodically clean up old files in the scripts directory."""
-    import time
-    import os
-    import glob
-    
-    while True:
-        try:
-            # Wait 30 minutes before next cleanup
-            await asyncio.sleep(1800)
-            
-            # Remove files older than 1 hour from scripts directory
-            current_time = time.time()
-            if os.path.exists('scripts'):
-                for file_path in glob.glob('scripts/*'):
-                    if os.path.isfile(file_path):
-                        # Check if file is older than 1 hour (3600 seconds)
-                        if current_time - os.path.getmtime(file_path) > 3600:
-                            try:
-                                os.remove(file_path)
-                                logger.info(f"Automatically cleaned up old file: {file_path}")
-                            except Exception as e:
-                                logger.error(f"Error cleaning up file {file_path}: {e}")
-        except asyncio.CancelledError:
-            logger.info("Periodic cleanup task cancelled")
-            break
-        except Exception as e:
-            logger.error(f"Error in periodic cleanup: {e}")
-            # Continue running despite errors
-            await asyncio.sleep(1800)  # Wait 30 minutes before retrying
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
