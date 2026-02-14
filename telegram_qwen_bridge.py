@@ -444,8 +444,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(welcome_message)
 
 
-async def main_async() -> None:
-    """Async main function to start the Telegram bot."""
+def main() -> None:
+    """Main function to start the Telegram bot."""
     load_dotenv()
 
     token = os.environ.get('TELEGRAM_BOT_TOKEN')
@@ -459,7 +459,7 @@ async def main_async() -> None:
         print("WARNING: TELEGRAM_ADMIN_ID not set in .env file. Bot will accept messages from any user.")
         print("For security, set TELEGRAM_ADMIN_ID to your Telegram chat ID.")
 
-    # Start the periodic cleanup task
+    # Start the periodic cleanup task using the running event loop
     cleanup_task = asyncio.create_task(periodic_cleanup())
     
     try:
@@ -481,15 +481,11 @@ async def main_async() -> None:
         # Cancel the cleanup task when shutting down
         cleanup_task.cancel()
         try:
-            await asyncio.wait_for(cleanup_task, timeout=1.0)
+            # Give the task a moment to cancel gracefully
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.wait_for(cleanup_task, timeout=1.0))
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass  # Expected when cancelling
-
-
-def main() -> None:
-    """Main function to start the Telegram bot."""
-    # Run the async main function
-    asyncio.run(main_async())
 
 
 if __name__ == '__main__':
