@@ -480,12 +480,8 @@ def main() -> None:
     finally:
         # Cancel the cleanup task when shutting down
         cleanup_task.cancel()
-        try:
-            # Give the task a moment to cancel gracefully
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.wait_for(cleanup_task, timeout=1.0))
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass  # Expected when cancelling
+        # Note: We can't await the task cancellation here due to event loop conflicts
+        # The task will be cancelled when the event loop closes
 
 
 if __name__ == '__main__':
