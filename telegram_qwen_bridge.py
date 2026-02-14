@@ -444,6 +444,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(welcome_message)
 
 
+def cleanup_old_files_job(context):
+    """Job function to cleanup old files in scripts directory."""
+    import time
+    import os
+    import glob
+    
+    # Remove files older than 1 hour from scripts directory
+    current_time = time.time()
+    if os.path.exists('scripts'):
+        for file_path in glob.glob('scripts/*'):
+            if os.path.isfile(file_path):
+                # Check if file is older than 1 hour (3600 seconds)
+                if current_time - os.path.getmtime(file_path) > 3600:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Automatically cleaned up old file: {file_path}")
+                    except Exception as e:
+                        logger.error(f"Error cleaning up file {file_path}: {e}")
+
+
 def main() -> None:
     """Main function to start the Telegram bot."""
     load_dotenv()
@@ -459,14 +479,15 @@ def main() -> None:
         print("WARNING: TELEGRAM_ADMIN_ID not set in .env file. Bot will accept messages from any user.")
         print("For security, set TELEGRAM_ADMIN_ID to your Telegram chat ID.")
 
-    # Start the periodic cleanup task using the running event loop
-    cleanup_task = asyncio.create_task(periodic_cleanup())
-    
     try:
-        app = ApplicationBuilder().token(token).job_queue(None).build()
+        app = ApplicationBuilder().token(token).job_queue(True).build()
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+        # Add the cleanup job to run every 30 minutes (1800 seconds)
+        job_queue = app.job_queue
+        job_queue.run_repeating(cleanup_old_files_job, interval=1800, first=10)  # Start after 10 seconds
 
         logger.info("Simple Telegram-Qwen Bridge with General Agent Capabilities Bot Starting...")
         print("Bot is running. Press Ctrl+C to stop.")
@@ -477,11 +498,6 @@ def main() -> None:
     except Exception as e:
         logger.error(f"Application error: {e}")
         print(f"An error occurred: {e}")
-    finally:
-        # Cancel the cleanup task when shutting down
-        cleanup_task.cancel()
-        # Note: We can't await the task cancellation here due to event loop conflicts
-        # The task will be cancelled when the event loop closes
 
 
 if __name__ == '__main__':
