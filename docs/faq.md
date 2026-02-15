@@ -1,193 +1,91 @@
-# Frequently Asked Questions (FAQ)
+# FAQ
 
-Answers to common questions about the Telegram-Qwen Bridge.
+Frequently asked questions about the Telegram-Qwen agent.
 
-## General Questions
+## General
 
-### What is the Telegram-Qwen Bridge?
+### What is this project?
 
-The Telegram-Qwen Bridge is a Python application that connects Telegram messaging with the Qwen AI model, allowing you to control your computer through Telegram messages. It enables you to execute commands, perform agentic tasks, and interact with your system remotely.
+A Telegram bot powered by Qwen AI that acts as an autonomous agent. It can search the web, read/write files, execute commands, modify its own code, and run multi-step tasks with checkpoint recovery.
 
-### How does it work?
+### Is it safe to run?
 
-The bridge works by:
-1. Receiving messages from your Telegram bot
-2. Checking if the sender is authorized
-3. Passing your request to the Qwen AI with conversation history
-4. If Qwen responds with executable commands, running them on your system
-5. Sending the results back to your Telegram chat
+The bot has full access to the machine it runs on. Only deploy on trusted systems and always set `TELEGRAM_ADMIN_ID` to restrict access. See [Security](security.md) for details.
 
-### Is it secure?
+### What AI model does it use?
 
-Security is a primary concern. The bridge includes:
-- Authorization system that restricts access to a specific user
-- Environment variables for sensitive configuration
-- Audit logging of all activities
-However, since it executes commands on your system, follow the security best practices outlined in the documentation.
+It uses the Qwen CLI (`@qwen-code/qwen-code`), which runs locally on your machine. No API keys or cloud services required for the AI model itself.
 
-## Installation Questions
+## Setup
 
-### What are the system requirements?
+### Do I need a GPU?
 
-- Python 3.8 or higher
-- A Telegram account to create a bot
-- Qwen CLI installed (`pip install qwen-cli`)
-- Windows, macOS, or Linux operating system
-- Internet connection
+No. The Qwen CLI handles model inference. Check the Qwen CLI documentation for hardware requirements.
 
-### Do I need to install Qwen separately?
+### Can I run it on a server?
 
-Yes, you need to install the Qwen CLI separately using:
+Yes. Use `python watchdog.py` for production. The watchdog handles crash recovery and auto-restart.
+
+### What Python version do I need?
+
+Python 3.10 or higher. Tested on Python 3.14.
+
+## Usage
+
+### How many tools can the bot chain in one request?
+
+Up to 15 tool calls per request (configurable via `MAX_TOOL_TURNS`).
+
+### What happens if the bot crashes mid-task?
+
+The task is checkpointed after each tool call. Use `/resume <task_id>` to continue from the last checkpoint.
+
+### How do I restrict access to my bot?
+
+Set `TELEGRAM_ADMIN_ID` in `.env` to your Telegram chat ID. Only you will be able to interact with the bot.
+
+### Can the bot modify its own code?
+
+Yes, using the `SELF_MODIFY` tool. Changes are applied after `SELF_RESTART`. The watchdog detects exit code 42 and restarts the bot immediately.
+
+### How long can a task run?
+
+There's no hard limit on overall task duration. Individual Qwen calls have a 10-minute timeout, but tasks can chain up to 15 calls. Use `/resume` to continue after the turn limit.
+
+## Troubleshooting
+
+### The bot is slow to respond
+
+Qwen CLI processing time depends on the complexity of the request. Each call has a 10-minute timeout. Check `qwen --help` for tuning options.
+
+### I'm getting rate limited
+
+The bot has a built-in rate limiter (5 messages per 10 seconds by default). Wait a few seconds and try again, or increase `RATE_LIMIT_MESSAGES` in `.env`.
+
+### Web search returns nothing
+
+DuckDuckGo may occasionally rate-limit. Wait a moment and retry.
+
+## Development
+
+### How do I run the tests?
+
 ```bash
-pip install qwen-cli
+pytest
 ```
 
-### Why isn't my bot responding?
+This runs all 220 tests with 100% coverage. See [Testing](testing.md) for details.
 
-Common causes:
-1. Invalid bot token in `.env` file
-2. Network connectivity issues
-3. Incorrect `TELEGRAM_ADMIN_ID`
-4. Missing dependencies
+### How do I add a new tool?
 
-Check the console for error messages and verify your configuration.
+1. Add the tool function to `bot/tools.py` (follow the existing pattern)
+2. Add the tool description to `TOOL_DESCRIPTIONS`
+3. Add the tool to the dispatch logic in `task_engine.py`
+4. Add tests in `tests/test_tools.py`
+5. Run `pytest` and verify 100% coverage
 
-## Usage Questions
+### How do I add a new command?
 
-### How do I get my Telegram chat ID?
-
-Send the `/id` command to your running bot, or use the `/id` command in your bot's chat.
-
-### Can multiple people use the bot?
-
-By default, only the user with the chat ID specified in `TELEGRAM_ADMIN_ID` can use the bot. You can modify the code to support multiple administrators if needed.
-
-### What commands can I run?
-
-You can run any command that the user running the bot has permissions to execute. The bot supports all shell commands available on your system.
-
-### How does the [EXEC] syntax work?
-
-When Qwen responds with `[EXEC]command[/EXEC]`, the bridge executes that command on your system and returns the output. This allows Qwen to perform multi-step tasks.
-
-### Can I run Python scripts?
-
-Yes, you can run Python scripts using:
-```
-[EXEC]python -c "your python code here"[/EXEC]
-```
-
-## Security Questions
-
-### How is access controlled?
-
-Access is controlled through the `TELEGRAM_ADMIN_ID` environment variable. Only users with the matching chat ID can interact with the bot.
-
-### What commands are safe to run?
-
-Be cautious with commands that:
-- Modify system settings
-- Delete files
-- Install software
-- Access sensitive data
-Always review commands before allowing execution.
-
-### Can the bot access my personal files?
-
-The bot can access any files that the user running it has permissions to access. Run the bot under a user account with limited privileges to minimize risk.
-
-## Technical Questions
-
-### Why does the bot timeout on some commands?
-
-Commands that take longer than `COMMAND_TIMEOUT` (default 60 seconds) will timeout. You can increase this value in the code if needed.
-
-### How is conversation history managed?
-
-Conversation history is stored in `chat_history.json` and maintained in memory during runtime. The `/reset` command clears the history.
-
-### Can I modify the system prompt?
-
-Yes, you can modify the system prompt in the `handle_message` function to change how Qwen behaves.
-
-### What happens to my data?
-
-- Conversation history is stored locally in `chat_history.json`
-- Audit logs are stored in `audit.log`
-- No data is sent to external servers except Telegram API and Qwen service
-
-## Troubleshooting Questions
-
-### The bot says "Access denied" even though I'm the admin
-
-Verify that:
-1. Your `TELEGRAM_ADMIN_ID` is correct
-2. The value in your `.env` file matches your actual chat ID
-3. You've restarted the bot after updating the environment file
-
-### Commands are failing with "command not found"
-
-This usually happens on Windows. The bot automatically prefixes commands with `cmd /c`, but you might need to:
-- Use full paths to executables
-- Check that the command exists in your PATH
-- Verify the command syntax
-
-### How do I debug issues?
-
-Enable debug logging by changing the logging level in the code, and check:
-- Console output for error messages
-- `audit.log` for activity records
-- System logs for related errors
-
-### The bot stops responding suddenly
-
-Possible causes:
-- Network connectivity issues
-- Process killed due to resource constraints
-- Unhandled exception in the code
-Check the console for error messages when this happens.
-
-## Advanced Questions
-
-### Can I extend the bot's functionality?
-
-Yes, you can add new commands by creating handler functions and registering them with the application. You can also add new tools for Qwen to use.
-
-### How do I backup my data?
-
-Backup the following files:
-- `chat_history.json` - Conversation history
-- `.env` - Configuration (keep this secure!)
-- Any custom scripts or modifications you've made
-
-### Can I run this in a container?
-
-Yes, the application can run in Docker containers. See the installation guide for Docker instructions.
-
-### How do I update the bot?
-
-1. Pull the latest changes from the repository
-2. Update dependencies if needed: `pip install -r requirements.txt`
-3. Restart the bot
-
-## Support Questions
-
-### Where can I get help?
-
-- Check the documentation in the `docs/` directory
-- Look for similar issues in the GitHub repository
-- Review the troubleshooting guide
-- Examine the audit logs for clues
-
-### How do I report bugs?
-
-Include the following information:
-- Operating system and Python version
-- Error messages from the console
-- Steps to reproduce the issue
-- Your configuration (without sensitive data)
-- Recent changes made to the code or configuration
-
-### Can I contribute to the project?
-
-Yes! Contributions are welcome. Please follow the contribution guidelines in the repository.
+1. Create the handler function in `bot/handlers.py`
+2. Register it in `telegram_qwen_bridge.py` with `app.add_handler(CommandHandler(...))`
+3. Add tests in `tests/test_handlers.py`

@@ -1,15 +1,17 @@
-# Telegram-Qwen Bridge Documentation
+# Telegram-Qwen Agent Documentation
 
-Welcome to the comprehensive documentation for the Telegram-Qwen Bridge. This project enables you to control your computer through Telegram messages using the Qwen AI model.
+End-to-end documentation for the Telegram-Qwen autonomous agent.
 
 ## Table of Contents
 
-1. [Getting Started](getting-started.md)
-2. [Installation Guide](installation-guide.md)
-3. [Configuration](configuration.md)
-4. [Usage Guide](usage-guide.md)
-5. [Security Considerations](security.md)
-6. [Troubleshooting](troubleshooting.md)
-7. [Advanced Features](advanced-features.md)
-8. [FAQ](faq.md)
-9. [Contributing](contributing.md)
+1. [Getting Started](getting-started.md) — Prerequisites, quick setup, first run
+2. [Installation Guide](installation-guide.md) — Detailed installation for all platforms
+3. [Configuration](configuration.md) — Environment variables and tuning
+4. [Usage Guide](usage-guide.md) — Commands, tools, and daily usage
+5. [Architecture](architecture.md) — Module design and data flow
+6. [Testing](testing.md) — Running the test suite, coverage, and contributing tests
+7. [Security](security.md) — Access control, sandboxing, and risks
+8. [Advanced Features](advanced-features.md) — Task checkpoints, self-modification, watchdog
+9. [Troubleshooting](troubleshooting.md) — Common issues and fixes
+10. [FAQ](faq.md) — Frequently asked questions
+11. [Contributing](contributing.md) — How to contribute

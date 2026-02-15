@@ -1,155 +1,119 @@
 # Installation Guide
 
-Detailed steps to install and set up the Telegram-Qwen Bridge on different platforms.
+Detailed platform-specific installation instructions.
 
 ## System Requirements
 
-- Operating System: Windows, macOS, or Linux
-- Python: Version 3.8 or higher
-- RAM: At least 1GB free
-- Storage: At least 50MB free space
-- Internet connection
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| Python | 3.10 | 3.12+ |
+| Node.js | 18 | 20+ (for Qwen CLI) |
+| RAM | 512 MB | 2 GB |
+| Disk | 100 MB | 500 MB |
 
-## Installing Python Dependencies
+## Step 1: Install Qwen CLI
 
-The project uses several Python packages. Install them using pip:
-
-```bash
-pip install -r requirements.txt
-```
-
-Or install individually:
+The agent uses Qwen via its CLI. Install it globally:
 
 ```bash
-pip install python-telegram-bot python-dotenv qwen-cli
+npm install -g @qwen-code/qwen-code
 ```
 
-## Setting Up Telegram Bot
-
-1. Open Telegram and search for `@BotFather`
-2. Start a chat with BotFather and use the `/newbot` command
-3. Follow the prompts to name your bot and get a bot token
-4. Save the bot token in your `.env` file as `TELEGRAM_BOT_TOKEN`
-
-## Installing Qwen CLI
-
-The bridge requires the Qwen CLI tool. Install it with pip:
-
-```bash
-pip install qwen-cli
-```
-
-Verify the installation by running:
+Verify installation:
 
 ```bash
 qwen --help
 ```
 
-## Platform-Specific Instructions
+## Step 2: Clone the Repository
 
-### Windows
+```bash
+git clone https://github.com/aarshps/telegram-qwen.git
+cd telegram-qwen
+```
 
-1. Download and install Python from [python.org](https://www.python.org/downloads/)
-2. Verify installation: `python --version`
-3. Clone the repository: `git clone https://github.com/aarshps/telegram-qwen.git`
-4. Navigate to the directory: `cd telegram-qwen`
-5. Run setup: `setup.bat`
-6. Configure `.env` file with your credentials
-7. Start the bot: `python telegram_qwen_bridge.py`
+## Step 3: Python Environment
 
-### macOS
+### Using the Setup Script
 
-1. Install Python using Homebrew:
-   ```bash
-   brew install python
-   ```
-2. Clone the repository:
-   ```bash
-   git clone https://github.com/aarshps/telegram-qwen.git
-   ```
-3. Navigate to the directory:
-   ```bash
-   cd telegram-qwen
-   ```
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   pip install qwen-cli
-   ```
-5. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-6. Edit `.env` with your credentials
-7. Start the bot:
-   ```bash
-   python telegram_qwen_bridge.py
-   ```
+**Windows:**
+```cmd
+setup.bat
+```
 
-### Linux (Ubuntu/Debian)
+**Linux/macOS:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
 
-1. Install Python:
-   ```bash
-   sudo apt update
-   sudo apt install python3 python3-pip
-   ```
-2. Clone the repository:
-   ```bash
-   git clone https://github.com/aarshps/telegram-qwen.git
-   ```
-3. Navigate to the directory:
-   ```bash
-   cd telegram-qwen
-   ```
-4. Install dependencies:
-   ```bash
-   pip3 install -r requirements.txt
-   pip3 install qwen-cli
-   ```
-5. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-6. Edit `.env` with your credentials
-7. Start the bot:
-   ```bash
-   python3 telegram_qwen_bridge.py
-   ```
+### Manual Setup
 
-## Docker Installation (Alternative)
+```bash
+python -m venv venv
+source venv/bin/activate    # Linux/macOS
+.\venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+```
 
-If you prefer using Docker, you can build and run the bot in a container:
+## Step 4: Create a Telegram Bot
 
-1. Create a `Dockerfile`:
-   ```dockerfile
-   FROM python:3.9-slim
-   
-   WORKDIR /app
-   
-   COPY requirements.txt .
-   RUN pip install -r requirements.txt
-   RUN pip install qwen-cli
-   
-   COPY . .
-   
-   CMD ["python", "telegram_qwen_bridge.py"]
-   ```
+1. Open Telegram and message [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow the prompts
+3. Copy the bot token (format: `123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`)
 
-2. Build the image:
-   ```bash
-   docker build -t telegram-qwen-bridge .
-   ```
+## Step 5: Get Your Chat ID
 
-3. Run the container:
-   ```bash
-   docker run -it --env-file .env telegram-qwen-bridge
-   ```
+1. Message [@userinfobot](https://t.me/userinfobot) on Telegram
+2. It will reply with your numeric chat ID
 
-## Verification
+## Step 6: Configure Environment
 
-After installation, verify everything works:
+```bash
+cp .env.example .env
+```
 
-1. Ensure the bot starts without errors
-2. Send `/start` to your bot on Telegram
-3. Verify you receive the welcome message
-4. Test the `/id` command to confirm bot functionality
+Edit `.env`:
+```
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ADMIN_ID=your_chat_id_here
+```
+
+## Step 7: Start the Bot
+
+**With auto-restart (recommended for production):**
+```bash
+python watchdog.py
+```
+
+**Direct start (for development):**
+```bash
+python telegram_qwen_bridge.py
+```
+
+## Verifying the Installation
+
+1. The console should show: `Bot started successfully`
+2. Message your bot on Telegram with `/start`
+3. You should receive a welcome message with the feature list
+
+## Dependencies
+
+All dependencies are in `requirements.txt`:
+
+| Package | Purpose |
+|---------|---------|
+| `python-telegram-bot` | Telegram Bot API |
+| `python-dotenv` | Environment variable loading |
+| `beautifulsoup4` | HTML content extraction |
+| `duckduckgo-search` | Web search tool |
+| `psutil` | System status information |
+| `httpx` | Async HTTP client |
+
+### Test Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `pytest` | Test framework |
+| `pytest-asyncio` | Async test support |
+| `pytest-cov` | Coverage reporting |

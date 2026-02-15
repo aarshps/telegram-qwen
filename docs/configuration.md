@@ -1,91 +1,60 @@
 # Configuration
 
-Learn how to configure the Telegram-Qwen Bridge for your specific needs.
+All settings are managed through environment variables in the `.env` file.
 
 ## Environment Variables
 
-The application uses environment variables stored in a `.env` file. Copy `.env.example` to create your own `.env` file:
+### Required
 
-```bash
-cp .env.example .env
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather) | `123456789:ABC...` |
+| `TELEGRAM_ADMIN_ID` | Your Telegram chat ID (leave empty for open access) | `123456789` |
+
+### Optional — Tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_TOOL_TURNS` | `15` | Max consecutive tool calls per request |
+| `QWEN_TIMEOUT` | `600` | Seconds per Qwen CLI call |
+| `MAX_RETRIES` | `3` | Retry attempts on Qwen failure |
+| `MAX_HISTORY_LENGTH` | `50` | Messages per user before summarization |
+| `RATE_LIMIT_MESSAGES` | `5` | Max messages per rate window |
+| `RATE_LIMIT_WINDOW` | `10` | Rate limit window in seconds |
+| `RESTART_EXIT_CODE` | `42` | Exit code for self-restart signal |
+
+## Configuration Module
+
+All configuration is centralized in `bot/config.py`. The `Config` class loads from `.env` with sensible defaults:
+
+```python
+from bot.config import Config
+
+Config.TELEGRAM_BOT_TOKEN   # Bot token
+Config.MAX_TOOL_TURNS       # 15
+Config.QWEN_TIMEOUT         # 600
+Config.BOT_ROOT             # Absolute path to project root
+Config.TASK_DIR             # data/tasks/
+Config.CONVERSATION_DIR     # data/conversations/
 ```
 
-### Required Variables
+## Data Directories
 
-#### TELEGRAM_BOT_TOKEN
-- **Purpose**: The authentication token for your Telegram bot
-- **How to obtain**: Get it from [@BotFather](https://t.me/BotFather) on Telegram
-- **Format**: A string like `123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`
+These are auto-created on first run and should **not** be committed to git:
 
-#### TELEGRAM_ADMIN_ID
-- **Purpose**: Restricts bot access to authorized users only
-- **How to obtain**: Send `/id` command to your running bot, or use other methods to get your Telegram chat ID
-- **Format**: A numeric string like `123456789`
-
-### Optional Variables
-
-The application doesn't currently use additional environment variables, but you could extend it to include:
-
-- `LOG_LEVEL`: Set to DEBUG, INFO, WARNING, or ERROR (defaults to INFO)
-- `COMMAND_TIMEOUT`: Maximum time (in seconds) for command execution (defaults to 60)
-- `QWEN_TIMEOUT`: Maximum time (in seconds) for Qwen responses (defaults to 120)
-
-## Code Configuration
-
-Several constants can be adjusted in the main script (`telegram_qwen_bridge.py`):
-
-### Timeout Settings
-- `COMMAND_TIMEOUT`: Time limit for command execution (default: 60 seconds)
-- `QWEN_TIMEOUT`: Time limit for Qwen responses (default: 120 seconds)
-
-### Message Limits
-- `MAX_MESSAGE_LENGTH`: Maximum length of messages sent to Telegram (default: 4096 characters)
-- `MAX_OUTPUT_LENGTH`: Maximum length of command output stored (default: 8000 characters)
-- `MAX_HISTORY_MESSAGES`: Number of messages kept in conversation history (default: 20)
-
-### Loop Settings
-- `MAX_TURN_COUNT`: Maximum number of turns in the ReAct loop (default: 10)
+| Directory | Purpose |
+|-----------|---------|
+| `data/conversations/` | Per-user chat history JSON files |
+| `data/tasks/` | Task checkpoint JSON files |
 
 ## Security Configuration
 
-### Authorization
-The bot implements a simple authorization mechanism:
-- Only users whose chat ID matches `TELEGRAM_ADMIN_ID` can interact with the bot
-- Unauthorized users receive a "🔒 Access denied" message
+### Admin Lock
 
-### Command Execution
-- The bot executes commands with the privileges of the user running it
-- Be cautious about which commands the bot can execute
-- Consider using a limited user account to run the bot
+Set `TELEGRAM_ADMIN_ID` to restrict the bot to a single user. Leave empty to allow all users (not recommended for production).
 
-## File Locations
+### Rate Limiting
 
-### Persistent Data
-- `chat_history.json`: Stores conversation history between sessions
-- `audit.log`: Records all bot activities for security review
-
-### Configuration Files
-- `.env`: Contains sensitive configuration values
-- `requirements.txt`: Lists Python dependencies
-
-## Customization Options
-
-### Modifying the System Prompt
-The system prompt that guides Qwen's behavior is located in the `handle_message` function. You can customize it to:
-
-- Change the tools available to Qwen
-- Modify the output format expectations
-- Adjust the behavior for specific use cases
-
-### Adding New Commands
-You can extend the bot by adding new command handlers in the `main()` function:
-
-```python
-app.add_handler(CommandHandler("newcommand", new_command_function))
-```
-
-### Changing the Web Reader Tool
-The web reader tool in `tools/web_reader.py` can be customized to:
-- Change content extraction rules
-- Add support for different encodings
-- Modify the maximum content length processed
+Built-in rate limiting prevents abuse:
+- Default: 5 messages per 10-second window
+- Configure via `RATE_LIMIT_MESSAGES` and `RATE_LIMIT_WINDOW`

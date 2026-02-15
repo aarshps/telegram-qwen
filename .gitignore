@@ -4,8 +4,10 @@
 # Virtual environment
 venv/
 __pycache__/
+*.pyc
+*.pyo
 
-# Chat history files
+# Chat history files (legacy)
 chat_history_*.json
 
 # Log files
@@ -16,6 +18,21 @@ scripts/
 tmp/
 temp/
 
+# Data directories (persistent state — do not commit)
+data/
+
+# Test and coverage artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+test_output.txt
+
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
