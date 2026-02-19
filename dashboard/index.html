@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1012;
+            --surface: #1e1f23;
+            --primary: #d0bcff;
+            --on-primary: #381e72;
+            --text: #e6e1e5;
+            --text-dim: #938f99;
+            --border: #33353b;
+            --success: #b4f3b4;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Header */
+        header {
+            height: 64px;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--primary);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .stats b {
+            color: var(--primary);
+        }
+
+        /* Navigation */
+        nav {
+            height: 48px;
+            display: flex;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 12px;
+            flex-shrink: 0;
+        }
+
+        .nav-link {
+            padding: 0 20px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-dim);
+            border-bottom: 2px solid transparent;
+            transition: 0.2s;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+        }
+
+        .nav-link.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Layout */
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .list-pane {
+            width: 320px;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .detail-pane {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+            background: var(--bg);
+        }
+
+        /* List Items */
+        .item {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .item.active {
+            background: rgba(208, 188, 255, 0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        .item .title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .item .meta {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* Detail Elements */
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+        }
+
+        .h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .status {
+            font-size: 10px;
+            font-weight: 800;
+            background: var(--primary);
+            color: var(--on-primary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .step {
+            margin-bottom: 32px;
+            border-left: 2px solid var(--border);
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .step::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .step-reason {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: var(--text-dim);
+        }
+
+        .step-code {
+            background: #000;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .step-res {
+            font-size: 13px;
+            color: var(--text);
+            opacity: 0.9;
+            white-space: pre-wrap;
+        }
+
+        /* Full page views */
+        .full-view {
+            padding: 40px;
+            width: 100%;
+        }
+
+        .logs {
+            font-family: monospace;
+            font-size: 12px;
+            color: #8ab4f8;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        /* Utility */
+        .chat-view {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .msg.user {
+            background: var(--primary);
+            color: var(--on-primary);
+            align-self: flex-end;
+        }
+
+        .msg.assistant {
+            background: var(--surface);
+            align-self: flex-start;
+            border: 1px solid var(--border);
+        }
+
+        /* Hide logic */
+        [data-tab] {
+            display: none;
+            height: 100%;
+            width: 100%;
+        }
+
+        [data-tab].active {
+            display: flex;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">QWEN CONSOLE</div>
+        <div class="stats">
+            <div>CPU: <b id="cpu">0%</b></div>
+            <div>RAM: <b id="ram">0%</b></div>
+            <div style="border-left: 1px solid var(--border); padding-left: 15px;">QWEN: <b id="qwen-status">...</b>
+                <small id="qwen-ver"></small></div>
+            <div>MCP: <b id="qwen-mcp">...</b></div>
+            <div style="color: var(--success)">● LIVE</div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="nav-link active" onclick="setTab('tasks')">Tasks</div>
+        <div class="nav-link" onclick="setTab('chats')">Chats</div>
+        <div class="nav-link" onclick="setTab('logs')">Logs</div>
+        <div class="nav-link" onclick="setTab('config')">Config</div>
+    </nav>
+
+    <main>
+        <!-- Tasks -->
+        <div id="view-tasks" class="full-view active" data-tab="tasks" style="padding: 0;">
+            <div class="list-pane" id="task-list"></div>
+            <div class="detail-pane" id="task-detail">
+                <p style="opacity: 0.5; text-align: center; margin-top: 50px;">Select a task</p>
+            </div>
+        </div>
+
+        <!-- Chats -->
+        <div id="view-chats" class="full-view" data-tab="chats" style="padding: 0;">
+            <div class="list-pane" id="chat-list"></div>
+            <div class="detail-pane" id="chat-detail">
+                <p style="opacity: 0.5; text-align: center; margin-top: 50px;">Select a chat</p>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div id="view-logs" class="full-view" data-tab="logs" style="overflow-y: auto;">
+            <div class="logs" id="log-view">Loading logs...</div>
+        </div>
+
+        <!-- Config -->
+        <div id="view-config" class="full-view" data-tab="config" style="overflow-y: auto;">
+            <div id="config-view"></div>
+        </div>
+    </main>
+
+    <script>
+        let curTab = 'tasks';
+        let selTid = null;
+        let selCid = null;
+
+        function setTab(t) {
+            curTab = t;
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.innerText.toLowerCase() === t));
+            document.querySelectorAll('[data-tab]').forEach(v => v.classList.toggle('active', v.dataset.tab === t));
+            poll();
+        }
+
+        async function poll() {
+            try {
+                const s = await fetch('/api/stats').then(r => r.json());
+                document.getElementById('cpu').innerText = s.system.cpu_percent + '%';
+                document.getElementById('ram').innerText = s.system.memory_percent + '%';
+
+                // Qwen Stats
+                if (s.qwen) {
+                    document.getElementById('qwen-ver').innerText = s.qwen.version;
+                    document.getElementById('qwen-status').innerText = s.qwen.status;
+                    document.getElementById('qwen-mcp').innerText = s.qwen.mcp_enabled ? 'ON' : 'OFF';
+                }
+
+                if (curTab === 'tasks') {
+                    const ts = await fetch('/api/tasks').then(r => r.json());
+                    document.getElementById('task-list').innerHTML = ts.map(t => `
+                        <div class="item ${t.task_id === selTid ? 'active' : ''}" onclick="showTask('${t.task_id}')">
+                            <span class="title">${t.user_request}</span>
+                            <div class="meta">${t.task_id.slice(0, 8)} • ${t.status}</div>
+                        </div>
+                    `).join('');
+                } else if (curTab === 'chats') {
+                    const cs = await fetch('/api/conversations').then(r => r.json());
+                    document.getElementById('chat-list').innerHTML = cs.map(c => `
+                        <div class="item ${c.chat_id === selCid ? 'active' : ''}" onclick="showChat('${c.chat_id}')">
+                            <span class="title">Chat ${c.chat_id}</span>
+                            <div class="meta">${c.message_count} messages</div>
+                        </div>
+                    `).join('');
+                } else if (curTab === 'logs') {
+                    const l = await fetch('/api/logs').then(r => r.text());
+                    const v = document.getElementById('log-view');
+                    const down = v.parentElement.scrollHeight - v.parentElement.scrollTop <= v.parentElement.clientHeight + 100;
+                    v.innerText = l;
+                    if (down) v.parentElement.scrollTop = v.parentElement.scrollHeight;
+                } else if (curTab === 'config') {
+                    const c = await fetch('/api/config').then(r => r.json());
+                    document.getElementById('config-view').innerHTML = `
+                        <div class="h2">Engine Configuration</div>
+                        ${Object.entries(c).map(([k, v]) => `
+                            <div style="margin-bottom: 16px;">
+                                <div style="font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase;">${k.replace(/_/g, ' ')}</div>
+                                <div style="font-family: monospace; font-size: 14px; opacity: 0.8;">${JSON.stringify(v)}</div>
+                            </div>
+                        `).join('')}
+                    `;
+                }
+            } catch (e) { }
+        }
+
+        async function showTask(id) {
+            selTid = id;
+            const t = await fetch(`/api/tasks/${id}`).then(r => r.json());
+            document.getElementById('task-detail').innerHTML = `
+                <div class="status">${t.status}</div>
+                <div class="h2" style="margin-bottom: 40px;">${t.user_request}</div>
+                ${t.steps.map((s, i) => `
+                    <div class="step">
+                        <div class="step-reason">${s.qwen_reasoning || s.qwen_response || ''}</div>
+                        <div class="step-code">${s.tool_name}(${s.tool_params})</div>
+                        <div class="step-res">${s.tool_result || '---'}</div>
+                    </div>
+                `).join('')}
+                ${t.final_response ? `
+                    <div class="card" style="border-color: var(--primary);">
+                        <div style="color: var(--primary); font-weight: 700; margin-bottom: 8px;">Final Output</div>
+                        <div style="line-height: 1.6;">${t.final_response}</div>
+                    </div>
+                ` : ''}
+            `;
+            poll();
+        }
+
+        async function showChat(id) {
+            selCid = id;
+            const ms = await fetch(`/api/conversations/${id}`).then(r => r.json());
+            document.getElementById('chat-detail').innerHTML = `
+                <div class="h2">History for ${id}</div>
+                <div class="chat-view">
+                    ${ms.map(m => `
+                        <div class="msg ${m.role}">
+                            <div style="font-size: 10px; opacity: 0.5; margin-bottom: 4px; text-transform: uppercase;">${m.role}</div>
+                            ${m.content}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            document.getElementById('chat-detail').scrollTop = document.getElementById('chat-detail').scrollHeight;
+            poll();
+        }
+
+        setInterval(poll, 3000);
+        poll();
+    </script>
+</body>
+
+</html>

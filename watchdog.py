@@ -12,6 +12,9 @@ import time
 import logging
 from pathlib import Path
 
+import psutil
+from bot.config import Config
+
 # Setup logging
 logging.basicConfig(
     format="%(asctime)s - WATCHDOG - %(levelname)s - %(message)s",
@@ -26,6 +29,31 @@ COOLDOWN_WAIT = 120  # seconds to wait after too many rapid restarts
 CRASH_WAIT = 5  # seconds to wait after a crash before restarting
 
 BOT_SCRIPT = str(Path(__file__).parent / "telegram_qwen_bridge.py")
+PID_FILE = Path(__file__).parent / "data" / "watchdog.pid"
+
+
+def check_single_instance():
+    """Ensure only one watchdog is running using a PID file."""
+    Config.ensure_dirs()
+    if PID_FILE.exists():
+        try:
+            old_pid = int(PID_FILE.read_text().strip())
+            if psutil.pid_exists(old_pid):
+                proc = psutil.Process(old_pid)
+                # Verify it's actually another watchdog
+                if "python" in proc.name().lower() and "watchdog.py" in " ".join(proc.cmdline()):
+                    log.error(f"Watchdog is already running (PID: {old_pid}). Exiting.")
+                    sys.exit(1)
+            # If we're here, the process is dead, we can take over
+            log.info(f"Removing stale lock file for PID {old_pid}")
+            PID_FILE.unlink()
+        except (ValueError, OSError, psutil.NoSuchProcess, psutil.AccessDenied):
+            PID_FILE.unlink(missing_ok=True)
+
+    PID_FILE.write_text(str(os.getpid()))
+
+
+import os
 
 
 def run_watchdog():
@@ -85,10 +113,14 @@ def run_watchdog():
 
 def main():
     """Entry point for the watchdog script."""
+    check_single_instance()
     try:
         run_watchdog()
     except KeyboardInterrupt:
         log.info("Watchdog stopped.")
+    finally:
+        if PID_FILE.exists():
+            PID_FILE.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":  # pragma: no cover

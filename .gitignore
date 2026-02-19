@@ -14,9 +14,10 @@ chat_history_*.json
 *.log
 
 # Scripts and temporary files created by agent
-scripts/
+workspace/
 tmp/
 temp/
+agent_scripts/
 
 # Data directories (persistent state — do not commit)
 data/

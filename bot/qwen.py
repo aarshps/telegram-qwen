@@ -25,6 +25,10 @@ def build_system_prompt() -> str:
         "- Verify results before moving to the next step\n"
         "- If something fails, diagnose the error and retry with a corrected approach\n"
         "- Never give up on the first failure — analyze and adapt\n\n"
+        "### ROOT DIRECTORY HYGIENE (STRICT RULE):\n"
+        "- **NEVER** create files, scripts, or folders in the root directory: `c:\\Users\\Aarsh\\Source\\telegram-qwen\\`.\n"
+        "- **ALWAYS** use the `workspace/` directory for all temporary files, helper scripts, tests, or output files.\n"
+        "- The root directory is reserved ONLY for core application code. If you must create a new script to test something, it BELONGS in `workspace/`.\n\n"
         "You are talking to your admin via Telegram. Be concise but thorough in your final responses.\n\n"
         f"{TOOL_DESCRIPTIONS}"
     )

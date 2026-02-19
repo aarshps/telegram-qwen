@@ -10,10 +10,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+BOT_ROOT = Path(__file__).resolve().parent.parent
+LOG_FILE = BOT_ROOT / "data" / "bot.log"
+
 # Logging setup
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_FILE, encoding="utf-8")
+    ]
 )
 logger = logging.getLogger("telegram-qwen")
 
@@ -30,7 +37,7 @@ class Config:
     DATA_DIR: Path = BOT_ROOT / "data"
     CONVERSATION_DIR: Path = DATA_DIR / "conversations"
     TASK_DIR: Path = DATA_DIR / "tasks"
-    SCRIPTS_DIR: Path = BOT_ROOT / "scripts"
+    WORKSPACE_DIR: Path = BOT_ROOT / "workspace"
 
     # Qwen
     QWEN_TIMEOUT: int = int(os.environ.get("QWEN_TIMEOUT", "600"))
@@ -57,5 +64,5 @@ class Config:
     @classmethod
     def ensure_dirs(cls):
         """Create all required data directories."""
-        for d in [cls.DATA_DIR, cls.CONVERSATION_DIR, cls.TASK_DIR, cls.SCRIPTS_DIR]:
+        for d in [cls.DATA_DIR, cls.CONVERSATION_DIR, cls.TASK_DIR, cls.WORKSPACE_DIR]:
             d.mkdir(parents=True, exist_ok=True)

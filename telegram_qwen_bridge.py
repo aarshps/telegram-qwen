@@ -19,8 +19,11 @@ from bot.handlers import (
     cmd_tasks,
     cmd_resume,
     cmd_selfupdate,
+    cmd_dashboard,
     handle_message,
 )
+from bot.dashboard import start_dashboard
+import threading
 
 
 def main() -> None:
@@ -46,9 +49,14 @@ def main() -> None:
         app.add_handler(CommandHandler("tasks", cmd_tasks))
         app.add_handler(CommandHandler("resume", cmd_resume))
         app.add_handler(CommandHandler("selfupdate", cmd_selfupdate))
+        app.add_handler(CommandHandler("dashboard", cmd_dashboard))
 
         # Register message handler
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+        # Start Dashboard in background thread
+        dash_thread = threading.Thread(target=start_dashboard, daemon=True)
+        dash_thread.start()
 
         logger.info("Telegram-Qwen Autonomous Agent v2.0 starting...")
         logger.info(f"Max tool turns: {Config.MAX_TOOL_TURNS}")

@@ -19,6 +19,10 @@ from bot.config import Config
 
 logger = logging.getLogger("telegram-qwen.tools")
 
+# Ensure workspace is in sys.path for dynamic imports of agent-created scripts
+if str(Config.WORKSPACE_DIR) not in sys.path:
+    sys.path.append(str(Config.WORKSPACE_DIR))
+
 # Tool timeout for individual executions (seconds)
 TOOL_TIMEOUT = 600  # 10 minutes
 
@@ -217,8 +221,8 @@ async def tool_python(code: str) -> dict:
     """Execute Python code directly. Writes to a temp file, runs it, captures output."""
     try:
         Config.ensure_dirs()
-        # Write code to a temp file in scripts/
-        script_path = Config.SCRIPTS_DIR / f"_exec_{os.getpid()}.py"
+        # Write code to a temp file in workspace/
+        script_path = Config.WORKSPACE_DIR / f"_exec_{os.getpid()}.py"
         script_path.write_text(code, encoding="utf-8")
 
         try:
@@ -281,6 +285,154 @@ async def tool_self_modify(relative_path: str, content: str) -> dict:
         return _result("error", f"Self-modification failed: {e}")
 
 
+# ─── Tool: MOLTBOOK_POST_COMMENT ────────────────────────────────────────────────
+
+async def tool_moltbook_post_comment(num_comments: str) -> dict:
+    """Post comments on other users' posts on Moltbook."""
+    try:
+        from moltbook_api import post_comment_on_other_posts
+        
+        num = int(num_comments) if num_comments.isdigit() else 5
+        api_key = os.getenv('MOLTBOOK_API_KEY')
+        
+        if not api_key:
+            return _result("error", "MOLTBOOK_API_KEY environment variable is not set")
+        
+        results = post_comment_on_other_posts(api_key, num)
+        
+        success_count = sum(1 for r in results if r['success'])
+        output = f"Attempted to post {num} comments, {success_count} succeeded:\n\n"
+        for result in results:
+            if result['success']:
+                output += f"✓ Commented on '{result['post_title']}' (Post ID: {result['post_id']})\n"
+            else:
+                output += f"✗ Failed to comment on '{result['post_title']}': {result['error']}\n"
+        
+        return _result("success", output)
+
+    except Exception as e:
+        logger.error(f"MOLTBOOK_POST_COMMENT error: {e}")
+        return _result("error", f"Failed to post comments on Moltbook: {e}")
+
+
+# ─── Tool: MOLTBOOK_UPVOTE ──────────────────────────────────────────────────────
+
+async def tool_moltbook_upvote(post_count: str, comment_count: str) -> dict:
+    """Upvote posts and comments on Moltbook."""
+    try:
+        from moltbook_api import upvote_content
+        
+        post_num = int(post_count) if post_count.isdigit() else 5
+        comment_num = int(comment_count) if comment_count.isdigit() else 10
+        api_key = os.getenv('MOLTBOOK_API_KEY')
+        
+        if not api_key:
+            return _result("error", "MOLTBOOK_API_KEY environment variable is not set")
+        
+        results = upvote_content(api_key, post_num, comment_num)
+        
+        post_success_count = sum(1 for r in results['post_upvotes'] if r['success'])
+        comment_success_count = sum(1 for r in results['comment_upvotes'] if r['success'])
+        
+        output = f"Attempted to upvote {post_num} posts and {comment_num} comments\n"
+        output += f"Posts: {post_success_count}/{post_num} succeeded\n"
+        output += f"Comments: {comment_success_count}/{comment_num} succeeded\n\n"
+        
+        output += "Post upvotes:\n"
+        for result in results['post_upvotes']:
+            if result['success']:
+                output += f"✓ Upvoted '{result['post_title']}' (Post ID: {result['post_id']})\n"
+            else:
+                output += f"✗ Failed to upvote '{result['post_title']}': {result['error']}\n"
+        
+        output += "\nComment upvotes:\n"
+        for result in results['comment_upvotes']:
+            if result['success']:
+                output += f"✓ Upvoted comment (ID: {result['comment_id']})\n"
+            else:
+                output += f"✗ Failed to upvote comment (ID: {result['comment_id']}): {result['error']}\n"
+        
+        return _result("success", output)
+
+    except Exception as e:
+        logger.error(f"MOLTBOOK_UPVOTE error: {e}")
+        return _result("error", f"Failed to upvote content on Moltbook: {e}")
+
+
+# ─── Tool: MOLTBOOK_DOWNVOTE ────────────────────────────────────────────────────
+
+async def tool_moltbook_downvote(post_count: str, comment_count: str) -> dict:
+    """Downvote posts and comments on Moltbook."""
+    try:
+        from moltbook_api import downvote_content
+        
+        post_num = int(post_count) if post_count.isdigit() else 5
+        comment_num = int(comment_count) if comment_count.isdigit() else 10
+        api_key = os.getenv('MOLTBOOK_API_KEY')
+        
+        if not api_key:
+            return _result("error", "MOLTBOOK_API_KEY environment variable is not set")
+        
+        results = downvote_content(api_key, post_num, comment_num)
+        
+        post_success_count = sum(1 for r in results['post_downvotes'] if r['success'])
+        comment_success_count = sum(1 for r in results['comment_downvotes'] if r['success'])
+        
+        output = f"Attempted to downvote {post_num} posts and {comment_num} comments\n"
+        output += f"Posts: {post_success_count}/{post_num} succeeded\n"
+        output += f"Comments: {comment_success_count}/{comment_num} succeeded\n\n"
+        
+        output += "Post downvotes:\n"
+        for result in results['post_downvotes']:
+            if result['success']:
+                output += f"✓ Downvoted '{result['post_title']}' (Post ID: {result['post_id']})\n"
+            else:
+                output += f"✗ Failed to downvote '{result['post_title']}': {result['error']}\n"
+        
+        output += "\nComment downvotes:\n"
+        for result in results['comment_downvotes']:
+            if result['success']:
+                output += f"✓ Downvoted comment (ID: {result['comment_id']})\n"
+            else:
+                output += f"✗ Failed to downvote comment (ID: {result['comment_id']}): {result['error']}\n"
+        
+        return _result("success", output)
+
+    except Exception as e:
+        logger.error(f"MOLTBOOK_DOWNVOTE error: {e}")
+        return _result("error", f"Failed to downvote content on Moltbook: {e}")
+
+
+# ─── Tool: MOLTBOOK_CREATE_POST ─────────────────────────────────────────────────
+
+async def tool_moltbook_create_post(num_posts: str) -> dict:
+    """Create new posts on Moltbook."""
+    try:
+        from moltbook_api import create_new_posts
+        
+        num = int(num_posts) if num_posts.isdigit() else 5
+        api_key = os.getenv('MOLTBOOK_API_KEY')
+        
+        if not api_key:
+            return _result("error", "MOLTBOOK_API_KEY environment variable is not set")
+        
+        results = create_new_posts(api_key, num)
+        
+        success_count = sum(1 for r in results if r['success'])
+        output = f"Attempted to create {num} posts, {success_count} succeeded:\n\n"
+        for result in results:
+            if result['success']:
+                output += f"✓ Created post '{result['title']}'\n"
+            else:
+                output += f"✗ Failed to create post '{result['title']}': {result['error']}\n"
+        
+        return _result("success", output)
+
+    except Exception as e:
+        logger.error(f"MOLTBOOK_CREATE_POST error: {e}")
+        return _result("error", f"Failed to create posts on Moltbook: {e}")
+
+
 # ─── Tool: SELF_RESTART ─────────────────────────────────────────────────────
 
 async def tool_self_restart() -> dict:
@@ -305,6 +457,10 @@ TOOL_PATTERNS = {
     "PYTHON": re.compile(r"\[PYTHON\](.*?)\[/PYTHON\]", re.DOTALL),
     "SELF_MODIFY": re.compile(r"\[SELF_MODIFY\](.*?)\[/SELF_MODIFY\]", re.DOTALL),
     "SELF_RESTART": re.compile(r"\[SELF_RESTART\](.*?)\[/SELF_RESTART\]", re.DOTALL),
+    "MOLTBOOK_POST_COMMENT": re.compile(r"\[MOLTBOOK_POST_COMMENT\](.*?)\[/MOLTBOOK_POST_COMMENT\]", re.DOTALL),
+    "MOLTBOOK_UPVOTE": re.compile(r"\[MOLTBOOK_UPVOTE\](.*?)\[/MOLTBOOK_UPVOTE\]", re.DOTALL),
+    "MOLTBOOK_DOWNVOTE": re.compile(r"\[MOLTBOOK_DOWNVOTE\](.*?)\[/MOLTBOOK_DOWNVOTE\]", re.DOTALL),
+    "MOLTBOOK_CREATE_POST": re.compile(r"\[MOLTBOOK_CREATE_POST\](.*?)\[/MOLTBOOK_CREATE_POST\]", re.DOTALL),
 }
 
 
@@ -356,6 +512,26 @@ async def execute_tool(tool_name: str, params: list[str]) -> dict:
     elif tool_name == "SELF_RESTART":
         return await tool_self_restart()
 
+    elif tool_name == "MOLTBOOK_POST_COMMENT":
+        return await tool_moltbook_post_comment(param)
+
+    elif tool_name == "MOLTBOOK_UPVOTE":
+        # Format: post_count|comment_count
+        parts = param.split("|", 1)
+        post_count = parts[0].strip() if parts else "5"
+        comment_count = parts[1].strip() if len(parts) > 1 else "10"
+        return await tool_moltbook_upvote(post_count, comment_count)
+
+    elif tool_name == "MOLTBOOK_DOWNVOTE":
+        # Format: post_count|comment_count
+        parts = param.split("|", 1)
+        post_count = parts[0].strip() if parts else "5"
+        comment_count = parts[1].strip() if len(parts) > 1 else "10"
+        return await tool_moltbook_downvote(post_count, comment_count)
+
+    elif tool_name == "MOLTBOOK_CREATE_POST":
+        return await tool_moltbook_create_post(param)
+
     else:
         return _result("error", f"Unknown tool: {tool_name}")
 
@@ -396,12 +572,26 @@ You have the following tools available. To use a tool, wrap your call in the app
 
 9. **[SELF_RESTART][/SELF_RESTART]** — Restart the bot (use after self-modification)
 
+10. **[MOLTBOOK_POST_COMMENT]num_comments[/MOLTBOOK_POST_COMMENT]** — Post comments on other users' posts on Moltbook
+    Example: [MOLTBOOK_POST_COMMENT]5[/MOLTBOOK_POST_COMMENT]
+
+11. **[MOLTBOOK_UPVOTE]post_count|comment_count[/MOLTBOOK_UPVOTE]** — Upvote posts and comments on Moltbook
+    Example: [MOLTBOOK_UPVOTE]5|10[/MOLTBOOK_UPVOTE]
+
+12. **[MOLTBOOK_DOWNVOTE]post_count|comment_count[/MOLTBOOK_DOWNVOTE]** — Downvote posts and comments on Moltbook
+    Example: [MOLTBOOK_DOWNVOTE]5|10[/MOLTBOOK_DOWNVOTE]
+
+13. **[MOLTBOOK_CREATE_POST]num_posts[/MOLTBOOK_CREATE_POST]** — Create new posts on Moltbook
+    Example: [MOLTBOOK_CREATE_POST]5[/MOLTBOOK_CREATE_POST]
+
 ## Rules
 - You can chain multiple tool calls across turns. After each tool result, decide the next step.
 - You have up to 15 sequential tool turns per request — use them for complex multi-step tasks.
 - For long tasks, break work into steps. Each tool call's result feeds into your next decision.
-- You have FULL admin access to this machine. No restrictions on file paths or commands.
-- For tasks requiring file creation, you can write anywhere on the system.
+- **STRICT DIRECTORY HYGIENE**: You have FULL admin access, but you MUST NOT clutter the root directory.
+- **ALWAYS** use the `workspace/` directory for all temporary files, helper scripts, data processing, and test outputs.
+- Never create new files in the root folder unless you are explicitly modifying the bot's core logic with `SELF_MODIFY`.
+- For any tasks requiring temporary file creation or script execution, use `workspace/path/to/file`.
 - If a tool fails, analyze the error and retry with a corrected approach.
 - When done with all tool calls, provide a final summary to the user.
 """.strip()

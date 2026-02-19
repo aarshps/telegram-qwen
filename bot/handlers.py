@@ -142,9 +142,11 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "*🔧 Self-Modification:*\n"
         "• \"Add a new tool that can XYZ\"\n"
         "• \"Improve your system prompt\"\n\n"
-        "*🔄 Long Tasks:*\n"
-        "Up to 15 tool turns per request. Tasks checkpoint automatically.\n"
-        "If I crash mid-task, use /resume to continue.\n\n"
+        "*🔄 Management:*\n"
+        "• /tasks — View your active tasks\n"
+        "• /dashboard — Get link to web dashboard\n"
+        "• /status — See system health\n"
+        "• /reset — Clear your history\n\n"
         "*⚠️ I have full admin access. Use wisely!*",
         parse_mode="Markdown",
     )
@@ -223,6 +225,27 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         f"• Qwen timeout: {Config.QWEN_TIMEOUT}s\n"
         f"• Max retries: {Config.MAX_RETRIES}"
         f"{sys_info}",
+        parse_mode="Markdown",
+    )
+
+
+# ─── Command: /dashboard ───────────────────────────────────────────────────
+
+async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send link to the web dashboard."""
+    if not _check_auth(update.effective_chat.id):
+        await update.message.reply_text("🔒 Access denied.")
+        return
+
+    # In a real setup, this would be the actual public URL/IP
+    # For local testing, we use the default uvicorn port
+    url = "http://localhost:8000"
+    
+    await update.message.reply_text(
+        f"🖥️ *Agent Dashboard*\n\n"
+        f"Monitor task execution, system stats, and conversations in real-time.\n\n"
+        f"🔗 [Open Dashboard]({url})\n\n"
+        f"_(Ensure you are on the same network or have the port forwarded)_",
         parse_mode="Markdown",
     )
 
@@ -391,8 +414,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _send_safe(update, f"❌ An error occurred: {str(e)}")
 
     finally:
-        typing_task.cancel()
         try:
+            typing_task.cancel()
             await typing_task
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, RuntimeError):
             pass

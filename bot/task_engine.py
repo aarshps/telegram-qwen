@@ -61,7 +61,8 @@ class Task:
     def __init__(self, task_id: str, chat_id: int, user_request: str,
                  status: str = TaskStatus.PENDING, steps: list = None,
                  current_step: int = 0, retry_count: int = 0,
-                 created_at: float = None, updated_at: float = None):
+                 created_at: float = None, updated_at: float = None,
+                 final_response: str = ""):
         self.task_id = task_id
         self.chat_id = chat_id
         self.user_request = user_request
@@ -71,6 +72,7 @@ class Task:
         self.retry_count = retry_count
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or time.time()
+        self.final_response = final_response
 
     def to_dict(self) -> dict:
         return {
@@ -83,6 +85,7 @@ class Task:
             "retry_count": self.retry_count,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "final_response": self.final_response,
         }
 
     @classmethod
@@ -98,6 +101,7 @@ class Task:
             retry_count=data.get("retry_count", 0),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
+            final_response=data.get("final_response", ""),
         )
 
     def save(self) -> None:
@@ -149,6 +153,23 @@ class TaskEngine:
     def __init__(self):
         Config.ensure_dirs()
         self.active_tasks: dict[str, Task] = {}
+        self.cleanup_stale_tasks()
+
+    def cleanup_stale_tasks(self):
+        """Find 'running' tasks from previous sessions and mark them as 'interrupted/checkpoint'."""
+        count = 0
+        for task_file in Config.TASK_DIR.glob("*.json"):
+            try:
+                task = Task.load(task_file.stem)
+                if task and task.status == TaskStatus.RUNNING:
+                    task.status = TaskStatus.CHECKPOINT
+                    task.save()
+                    count += 1
+            except Exception as e:
+                logger.error(f"Error cleaning up task {task_file.name}: {e}")
+        
+        if count > 0:
+            logger.info(f"Cleaned up {count} stale 'RUNNING' tasks.")
 
     def create_task(self, chat_id: int, user_request: str) -> Task:
         """Create a new task."""
@@ -249,6 +270,7 @@ class TaskEngine:
             else:
                 # No tool call or final turn — this is the final response
                 final_response = qwen_response
+                task.final_response = final_response
                 task.status = TaskStatus.COMPLETED
                 task.save()
                 break
