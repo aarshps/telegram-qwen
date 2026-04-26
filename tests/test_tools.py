@@ -398,7 +398,7 @@ class TestToolPython:
     async def test_cleanup_temp_file(self, temp_data_dirs):
         """Script file should be cleaned up after execution."""
         result = await tool_python("print('cleanup test')")
-        scripts = list(Config.SCRIPTS_DIR.glob("_exec_*.py"))
+        scripts = list(Config.WORKSPACE_DIR.glob("_exec_*.py"))
         assert len(scripts) == 0
 
     @pytest.mark.asyncio
@@ -497,70 +497,84 @@ class TestToolSelfRestart:
 class TestExtractToolCalls:
     def test_web_search(self):
         text = "Let me search [WEB_SEARCH]python latest version[/WEB_SEARCH]"
-        name, params = extract_tool_calls(text)
-        assert name == "WEB_SEARCH"
-        assert params == ["python latest version"]
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "WEB_SEARCH"
+        assert calls[0][1] == "python latest version"
 
     def test_web_read(self):
         text = "[WEB_READ]https://example.com[/WEB_READ]"
-        name, params = extract_tool_calls(text)
-        assert name == "WEB_READ"
-        assert params == ["https://example.com"]
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "WEB_READ"
+        assert calls[0][1] == "https://example.com"
 
     def test_file_read(self):
         text = "[FILE_READ]C:/test.txt[/FILE_READ]"
-        name, params = extract_tool_calls(text)
-        assert name == "FILE_READ"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "FILE_READ"
+        assert calls[0][1] == "C:/test.txt"
 
     def test_file_write(self):
         text = "[FILE_WRITE]test.txt|content here[/FILE_WRITE]"
-        name, params = extract_tool_calls(text)
-        assert name == "FILE_WRITE"
-        assert "content here" in params[0]
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "FILE_WRITE"
+        assert "content here" in calls[0][1]
 
     def test_list_files(self):
         text = "[LIST_FILES]./[/LIST_FILES]"
-        name, params = extract_tool_calls(text)
-        assert name == "LIST_FILES"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "LIST_FILES"
 
     def test_exec(self):
         text = "[EXEC]echo hello[/EXEC]"
-        name, params = extract_tool_calls(text)
-        assert name == "EXEC"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "EXEC"
 
     def test_python(self):
         text = "[PYTHON]print('hi')[/PYTHON]"
-        name, params = extract_tool_calls(text)
-        assert name == "PYTHON"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "PYTHON"
 
     def test_self_modify(self):
         text = "[SELF_MODIFY]bot/test.py|# new code[/SELF_MODIFY]"
-        name, params = extract_tool_calls(text)
-        assert name == "SELF_MODIFY"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "SELF_MODIFY"
 
     def test_self_restart(self):
         text = "[SELF_RESTART][/SELF_RESTART]"
-        name, params = extract_tool_calls(text)
-        assert name == "SELF_RESTART"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "SELF_RESTART"
 
     def test_no_tool_call(self):
         text = "Just a regular message without any tools."
-        name, params = extract_tool_calls(text)
-        assert name is None
-        assert params == []
+        calls = extract_tool_calls(text)
+        assert len(calls) == 0
 
     def test_multiline_tool(self):
         text = "[PYTHON]\nline1\nline2\nline3\n[/PYTHON]"
-        name, params = extract_tool_calls(text)
-        assert name == "PYTHON"
-        assert "line1" in params[0]
+        calls = extract_tool_calls(text)
+        assert len(calls) == 1
+        assert calls[0][0] == "PYTHON"
+        assert "line1" in calls[0][1]
 
-    def test_first_tool_wins(self):
-        """When multiple tools of different types are present, dict order determines winner."""
-        text = "[WEB_SEARCH]query[/WEB_SEARCH] [PYTHON]code[/PYTHON]"
-        name, params = extract_tool_calls(text)
-        # WEB_SEARCH comes first in TOOL_PATTERNS dict
-        assert name == "WEB_SEARCH"
+    def test_multiple_tools_in_order(self):
+        text = "First [WEB_SEARCH]query[/WEB_SEARCH] then [PYTHON]code[/PYTHON] and finally [EXEC]ls[/EXEC]"
+        calls = extract_tool_calls(text)
+        assert len(calls) == 3
+        assert calls[0][0] == "WEB_SEARCH"
+        assert calls[1][0] == "PYTHON"
+        assert calls[2][0] == "EXEC"
+        assert calls[0][1] == "query"
+        assert calls[1][1] == "code"
+        assert calls[2][1] == "ls"
 
 
 # ── Execute Tool Dispatcher ─────────────────────────────────────────────────

@@ -13,6 +13,12 @@ load_dotenv()
 BOT_ROOT = Path(__file__).resolve().parent.parent
 LOG_FILE = BOT_ROOT / "data" / "bot.log"
 
+class IgnoreTelemetryFilter(logging.Filter):
+    """Filter out routine HTTP requests (sendChatAction, getUpdates) to reduce log bloat."""
+    def filter(self, record):
+        msg = record.getMessage()
+        return "sendChatAction" not in msg and "getUpdates" not in msg
+
 # Logging setup
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -22,6 +28,10 @@ logging.basicConfig(
         logging.FileHandler(LOG_FILE, encoding="utf-8")
     ]
 )
+
+# Apply filter to httpx to silence routine polling logs
+logging.getLogger("httpx").addFilter(IgnoreTelemetryFilter())
+
 logger = logging.getLogger("telegram-qwen")
 
 

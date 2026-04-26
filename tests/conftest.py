@@ -28,7 +28,7 @@ def temp_data_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr("bot.config.Config.DATA_DIR", data_dir)
     monkeypatch.setattr("bot.config.Config.CONVERSATION_DIR", conv_dir)
     monkeypatch.setattr("bot.config.Config.TASK_DIR", task_dir)
-    monkeypatch.setattr("bot.config.Config.SCRIPTS_DIR", scripts_dir)
+    monkeypatch.setattr("bot.config.Config.WORKSPACE_DIR", scripts_dir) # Changed SCRIPTS_DIR to WORKSPACE_DIR
     monkeypatch.setattr("bot.config.Config.BOT_ROOT", tmp_path)
 
     return tmp_path

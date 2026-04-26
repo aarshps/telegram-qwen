@@ -464,13 +464,17 @@ TOOL_PATTERNS = {
 }
 
 
-def extract_tool_calls(text: str) -> tuple[str | None, list[str]]:
-    """Extract the first tool call from text. Returns (tool_name, [params])."""
+def extract_tool_calls(text: str) -> list[tuple[str, str]]:
+    """Extract all tool calls from text in order of appearance. Returns [(tool_name, param), ...]."""
+    calls = []
     for tool_name, pattern in TOOL_PATTERNS.items():
-        matches = pattern.findall(text)
-        if matches:
-            return tool_name, [m.strip() for m in matches]
-    return None, []
+        for match in pattern.finditer(text):
+            calls.append((match.start(), tool_name, match.group(1).strip()))
+    
+    # Sort by appearance in text
+    calls.sort(key=lambda x: x[0])
+    
+    return [(c[1], c[2]) for c in calls]
 
 
 async def execute_tool(tool_name: str, params: list[str]) -> dict:
@@ -585,9 +589,9 @@ You have the following tools available. To use a tool, wrap your call in the app
     Example: [MOLTBOOK_CREATE_POST]5[/MOLTBOOK_CREATE_POST]
 
 ## Rules
-- You can chain multiple tool calls across turns. After each tool result, decide the next step.
+- **PARALLEL EXECUTION**: You can output multiple tool calls in a single response (e.g., read two files at once). They will be executed sequentially in the order they appear. All results will be combined and returned to you in the next turn.
 - You have up to 15 sequential tool turns per request — use them for complex multi-step tasks.
-- For long tasks, break work into steps. Each tool call's result feeds into your next decision.
+- For long tasks, break work into steps. Each turn's results feed into your next decision.
 - **STRICT DIRECTORY HYGIENE**: You have FULL admin access, but you MUST NOT clutter the root directory.
 - **ALWAYS** use the `workspace/` directory for all temporary files, helper scripts, data processing, and test outputs.
 - Never create new files in the root folder unless you are explicitly modifying the bot's core logic with `SELF_MODIFY`.

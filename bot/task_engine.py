@@ -205,6 +205,7 @@ class TaskEngine:
 
         last_progress_time = time.time()
         final_response = ""
+        previous_responses = set()
 
         for turn in range(task.current_step, Config.MAX_TOOL_TURNS):
             task.current_step = turn
@@ -228,44 +229,60 @@ class TaskEngine:
                 task.save()
                 return qwen_response
 
+            # Deterministic loop prevention
+            if qwen_response in previous_responses:
+                logger.error(f"Task {task.task_id} entered a deterministic loop. Halting.")
+                final_response = qwen_response + "\n\n❌ [SYSTEM: Task halted because the agent entered an infinite generation loop.]"
+                task.final_response = final_response
+                task.status = TaskStatus.FAILED
+                task.save()
+                break
+
+            previous_responses.add(qwen_response)
+
             # Check for tool calls
-            tool_name, tool_params = extract_tool_calls(qwen_response)
+            extracted_tools = extract_tool_calls(qwen_response)
 
-            if tool_name and turn < Config.MAX_TOOL_TURNS - 1:
-                # Execute tool
-                step = TaskStep(
-                    index=turn,
-                    tool_name=tool_name,
-                    tool_params=tool_params[0] if tool_params else "",
-                    qwen_response=qwen_response,
-                )
-                task.steps.append(step)
+            if extracted_tools and turn < Config.MAX_TOOL_TURNS - 1:
+                results_for_next_turn = []
+                has_failure = False
 
-                try:
-                    tool_result = await execute_tool(tool_name, tool_params)
-                    result_text = json.dumps(tool_result, ensure_ascii=False)
-                    step.tool_result = result_text
-                    step.status = "completed"
+                for tool_idx, (tool_name, tool_param) in enumerate(extracted_tools):
+                    step = TaskStep(
+                        index=turn,
+                        tool_name=tool_name,
+                        tool_params=tool_param,
+                        qwen_response=qwen_response if tool_idx == 0 else "",
+                    )
+                    task.steps.append(step)
 
-                    # Checkpoint after each successful tool execution
-                    task.save()
+                    try:
+                        tool_result = await execute_tool(tool_name, [tool_param])
+                        result_text = json.dumps(tool_result, ensure_ascii=False)
+                        step.tool_result = result_text
+                        step.status = "completed"
+                        task.save()
 
-                    # Feed result back for next turn
-                    current_input = f"Tool [{tool_name}] result:\n{result_text}\n\nContinue with the task. If done, provide your final response to the user."
-                    # Clear task_context after first resume turn
-                    task_context = ""
+                        results_for_next_turn.append(f"Tool [{tool_name}] result:\n{result_text}")
 
-                except Exception as e:
-                    step.tool_result = f"Tool execution error: {e}"
-                    step.status = "failed"
-                    task.status = TaskStatus.CHECKPOINT
-                    task.save()
+                    except Exception as e:
+                        step.tool_result = f"Tool execution error: {e}"
+                        step.status = "failed"
+                        task.status = TaskStatus.CHECKPOINT
+                        task.save()
 
-                    logger.error(f"Tool execution failed at step {turn}: {e}")
+                        logger.error(f"Tool execution failed at step {turn}: {e}")
 
-                    # Try to recover by telling Qwen about the error
-                    current_input = f"Tool [{tool_name}] failed with error: {e}\n\nPlease try an alternative approach or diagnose the issue."
-                    task_context = ""
+                        results_for_next_turn.append(f"Tool [{tool_name}] failed with error: {e}")
+                        has_failure = True
+                        break
+
+                combined_results = "\n\n".join(results_for_next_turn)
+                if has_failure:
+                    current_input = f"{combined_results}\n\nA tool failed. Please try an alternative approach or diagnose the issue."
+                else:
+                    current_input = f"{combined_results}\n\nContinue with the task. If done, provide your final response to the user."
+                task_context = ""
 
             else:
                 # No tool call or final turn — this is the final response

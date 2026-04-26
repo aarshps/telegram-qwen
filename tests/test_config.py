@@ -30,7 +30,7 @@ class TestConfig:
         assert isinstance(Config.DATA_DIR, Path)
         assert isinstance(Config.CONVERSATION_DIR, Path)
         assert isinstance(Config.TASK_DIR, Path)
-        assert isinstance(Config.SCRIPTS_DIR, Path)
+        assert isinstance(Config.WORKSPACE_DIR, Path)
 
     def test_env_vars_with_defaults(self, monkeypatch):
         """Config should use defaults when env vars are not set."""
@@ -55,7 +55,7 @@ class TestConfig:
         assert Config.DATA_DIR.exists()
         assert Config.CONVERSATION_DIR.exists()
         assert Config.TASK_DIR.exists()
-        assert Config.SCRIPTS_DIR.exists()
+        assert Config.WORKSPACE_DIR.exists()
 
     def test_ensure_dirs_idempotent(self, temp_data_dirs):
         """ensure_dirs should be safe to call multiple times."""
